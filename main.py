@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from pydantic import BaseModel, Field, GetJsonSchemaHandler
+from typing import Optional, List, Any, Annotated
 from contextlib import asynccontextmanager
 import secrets
 import string
@@ -15,14 +15,15 @@ import os
 import uvicorn
 from fastapi.security import HTTPBearer
 from bson import ObjectId
+from pydantic.json_schema import JsonSchemaValue
 
 # Configuration
-MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")  # Default for local development
-JWT_SECRET = os.getenv("JWT", "your-secret-key")   # Default secret key
-DB_NAME = os.getenv("NAME", "chatapp")  # Default database name
-PORT = int(os.getenv("PORT", 10000))  # Default port 10000
+MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")
+JWT_SECRET = os.getenv("JWT", "your-secret-key")
+DB_NAME = os.getenv("NAME", "chatapp")
+PORT = int(os.getenv("PORT", 10000))
 
-# Custom JSON encoders
+# Custom ObjectId field
 class PyObjectId(ObjectId):
     @classmethod
     def __get_validators__(cls):
@@ -35,10 +36,12 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_json_schema__(
+        cls, _schema_generator: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        return {"type": "string"}
 
-# Updated Models with proper MongoDB ID handling
+# Models
 class MessageModel(BaseModel):
     content: str
     sender: str
@@ -47,12 +50,11 @@ class MessageModel(BaseModel):
     class Config:
         arbitrary_types_allowed = True
         json_encoders = {
-            ObjectId: str,
             datetime.datetime: lambda dt: dt.isoformat()
         }
 
 class ChatRoom(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
     code: str
     link: str
     created_at: datetime.datetime
@@ -61,30 +63,33 @@ class ChatRoom(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+        populate_by_name = True
         json_encoders = {
             ObjectId: str,
             datetime.datetime: lambda dt: dt.isoformat()
         }
-        populate_by_name = True
+
+    def dict(self, *args, **kwargs):
+        # Customize the dict representation
+        room_dict = super().dict(*args, **kwargs)
+        if room_dict.get("_id"):
+            room_dict["_id"] = str(room_dict["_id"])
+        return room_dict
 
 # Lifespan context manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create indexes and start cleanup task
     client = AsyncIOMotorClient(MONGO_URL)
     db = client[DB_NAME]
     
-    # Create indexes
     await db.rooms.create_index([("code", ASCENDING)], unique=True)
     await db.rooms.create_index([("link", ASCENDING)], unique=True)
     await db.rooms.create_index([("expires_at", ASCENDING)])
     
-    # Start cleanup task
     cleanup_task = asyncio.create_task(cleanup_expired_rooms())
     
     yield
     
-    # Cleanup: Cancel task and close MongoDB connection
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -98,7 +103,7 @@ security = HTTPBearer()
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with your frontend domain in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -110,12 +115,10 @@ db = client[DB_NAME]
 
 # Helper functions
 def generate_room_code(length: int = 6) -> str:
-    """Generate a random room code"""
     alphabet = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 def generate_short_link() -> str:
-    """Generate a unique short link"""
     return str(uuid.uuid4())[:8]
 
 # WebSocket connection manager
@@ -144,7 +147,6 @@ manager = ConnectionManager()
 
 # Cleanup task
 async def cleanup_expired_rooms():
-    """Delete expired rooms"""
     while True:
         try:
             await db.rooms.delete_many({
@@ -158,16 +160,16 @@ async def cleanup_expired_rooms():
 # Routes
 @app.get("/")
 async def root():
-    """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.datetime.utcnow()}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
 
 @app.post("/api/rooms/create")
 async def create_room():
-    """Create a new chat room"""
     code = generate_room_code()
     link = generate_short_link()
     
-    # Ensure unique code and link
     while await db.rooms.find_one({"code": code}):
         code = generate_room_code()
     while await db.rooms.find_one({"link": link}):
@@ -183,19 +185,22 @@ async def create_room():
     
     result = await db.rooms.insert_one(room)
     room["_id"] = result.inserted_id
-    return ChatRoom(**room)
+    return {"code": code, "link": link}
 
 @app.get("/api/rooms/{room_code}")
 async def get_room(room_code: str):
-    """Get room details and messages"""
-    room = await db.rooms.find_one({"code": room_code})
-    if not room:
+    room_dict = await db.rooms.find_one({"code": room_code})
+    if not room_dict:
         raise HTTPException(status_code=404, detail="Room not found")
-    return ChatRoom(**room)
+    
+    # Convert ObjectId to string
+    if room_dict.get("_id"):
+        room_dict["_id"] = str(room_dict["_id"])
+        
+    return room_dict
 
 @app.post("/api/rooms/{room_code}/extend")
 async def extend_room(room_code: str):
-    """Extend room expiration by 7 days"""
     result = await db.rooms.update_one(
         {"code": room_code},
         {"$set": {"expires_at": datetime.datetime.utcnow() + datetime.timedelta(days=7)}}
@@ -206,7 +211,6 @@ async def extend_room(room_code: str):
 
 @app.websocket("/ws/{room_code}")
 async def websocket_endpoint(websocket: WebSocket, room_code: str):
-    """WebSocket endpoint for real-time chat"""
     await manager.connect(websocket, room_code)
     try:
         while True:
@@ -217,13 +221,11 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
                 "timestamp": datetime.datetime.utcnow().isoformat()
             }
             
-            # Store message in database
             await db.rooms.update_one(
                 {"code": room_code},
                 {"$push": {"messages": message}}
             )
             
-            # Broadcast message to all connected clients
             await manager.broadcast(message, room_code)
             
     except WebSocketDisconnect:
