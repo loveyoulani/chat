@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
@@ -11,19 +11,14 @@ import os
 import uvicorn
 import aiohttp
 import base64
-from cryptography.fernet import Fernet
-import json
 
 # Configuration
 MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("NAME", "sayit")
 PORT = int(os.getenv("PORT", 10000))
 APP_URL = os.getenv("APP_URL", "http://localhost:10000")
-IMGBB_API_KEY = os.getenv("IMGBB_KEY")
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key())  # Generate a key if not provided
-
-# Initialize encryption
-fernet = Fernet(ENCRYPTION_KEY)
+IMGBB_API_KEY = os.getenv("IMGBB_API_KEY")
+MAX_IMAGE_SIZE = 32 * 1024 * 1024  # 32 MB in bytes
 
 app = FastAPI(title="Sayit Backend")
 
@@ -40,31 +35,7 @@ app.add_middleware(
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-# Pydantic models
-class Reaction(BaseModel):
-    emoji: str
-    count: int = 1
-    users: List[str] = []
-
-class Reply(BaseModel):
-    original_message_id: str
-    content: str
-    sender: str
-    timestamp: datetime
-
-class Message(BaseModel):
-    id: str = ""
-    type: str
-    content: str
-    sender: str
-    timestamp: datetime
-    media_url: Optional[str] = None
-    media_type: Optional[str] = None
-    reactions: Dict[str, Reaction] = {}
-    replies: List[Reply] = []
-    is_encrypted: bool = True
-
-# WebSocket manager (existing code remains the same)
+# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -111,45 +82,68 @@ class ConnectionManager:
                 except Exception:
                     disconnected.append(connection)
             
+            # Clean up disconnected clients
             for connection in disconnected:
                 self.disconnect(connection, room_code)
 
 manager = ConnectionManager()
 
-# Utility functions
-def generate_room_code(length: int = 6) -> str:
-    alphabet = string.ascii_uppercase + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+class ImageUploadResponse(BaseModel):
+    success: bool
+    image_url: Optional[str] = None
+    error: Optional[str] = None
 
-def generate_message_id() -> str:
-    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+async def upload_to_imgbb(image_data: bytes, filename: str) -> dict:
+    """Upload an image to ImgBB and return the response."""
+    if not IMGBB_API_KEY:
+        raise HTTPException(status_code=500, detail="ImgBB API key not configured")
 
-async def upload_to_imgbb(file_content: bytes, filename: str) -> dict:
-    url = f"https://api.imgbb.com/1/upload"
-    params = {
-        "key": IMGBB_API_KEY,
-        "expiration": 600  # 10 minutes expiration
-    }
-    
-    base64_image = base64.b64encode(file_content).decode('utf-8')
-    data = aiohttp.FormData()
-    data.add_field("image", base64_image)
+    base64_image = base64.b64encode(image_data).decode('utf-8')
     
     async with aiohttp.ClientSession() as session:
+        url = f"https://api.imgbb.com/1/upload"
+        params = {
+            "key": IMGBB_API_KEY,
+            "expiration": 600  # 10 minutes expiration
+        }
+        data = {
+            "image": base64_image,
+            "name": filename
+        }
+        
         async with session.post(url, params=params, data=data) as response:
-            if response.status != 200:
-                raise HTTPException(status_code=500, detail="Failed to upload media")
             result = await response.json()
-            return result["data"]
+            if not result.get("success"):
+                raise HTTPException(status_code=500, detail="Failed to upload image")
+            return result
 
-def encrypt_message(content: str) -> str:
-    return fernet.encrypt(content.encode()).decode()
+@app.post("/api/upload-image/{room_code}")
+async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUploadResponse:
+    """Upload an image and return the URL."""
+    try:
+        # Verify room exists
+        room = await db.rooms.find_one({"code": room_code})
+        if not room:
+            return ImageUploadResponse(success=False, error="Room not found")
 
-def decrypt_message(content: str) -> str:
-    return fernet.decrypt(content.encode()).decode()
+        # Read and validate file size
+        image_data = await file.read()
+        if len(image_data) > MAX_IMAGE_SIZE:
+            return ImageUploadResponse(success=False, error="Image size exceeds 32MB limit")
 
-# Background tasks
+        # Upload to ImgBB
+        result = await upload_to_imgbb(image_data, file.filename)
+        
+        return ImageUploadResponse(
+            success=True,
+            image_url=result["data"]["url"]
+        )
+
+    except Exception as e:
+        return ImageUploadResponse(success=False, error=str(e))
+
 async def ping_self():
+    """Periodically ping the application to keep it active."""
     async with aiohttp.ClientSession() as session:
         while True:
             try:
@@ -162,19 +156,10 @@ async def ping_self():
                 print(f"Self-ping error: {e}")
             await asyncio.sleep(600)
 
-async def cleanup_expired_rooms():
-    while True:
-        try:
-            result = await db.rooms.delete_many({
-                "expires_at": {"$lt": datetime.utcnow()}
-            })
-            print(f"Cleaned up {result.deleted_count} expired rooms")
-            await asyncio.sleep(3600)
-        except Exception as e:
-            print(f"Error in cleanup task: {e}")
-            await asyncio.sleep(300)
+def generate_room_code(length: int = 6) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-# Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
     try:
@@ -195,7 +180,18 @@ async def shutdown_event():
     if hasattr(app.state, 'ping_task'):
         app.state.ping_task.cancel()
 
-# API endpoints
+async def cleanup_expired_rooms():
+    while True:
+        try:
+            result = await db.rooms.delete_many({
+                "expires_at": {"$lt": datetime.utcnow()}
+            })
+            print(f"Cleaned up {result.deleted_count} expired rooms")
+            await asyncio.sleep(3600)
+        except Exception as e:
+            print(f"Error in cleanup task: {e}")
+            await asyncio.sleep(300)
+
 @app.get("/")
 async def root():
     return {
@@ -229,127 +225,8 @@ async def get_room(room_code: str):
     room = await db.rooms.find_one({"code": room_code})
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    
-    # Decrypt messages
-    for message in room["messages"]:
-        if message.get("is_encrypted", True):
-            message["content"] = decrypt_message(message["content"])
-            for reply in message.get("replies", []):
-                reply["content"] = decrypt_message(reply["content"])
-    
     room["_id"] = str(room["_id"])
     return room
-
-@app.post("/api/rooms/{room_code}/upload")
-async def upload_media(
-    room_code: str,
-    file: UploadFile = File(...),
-    sender: str = Form(...)
-):
-    # Verify room exists
-    room = await db.rooms.find_one({"code": room_code})
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-    
-    # Check file size (32MB limit)
-    file_size = 0
-    file_content = bytearray()
-    while chunk := await file.read(8192):
-        file_size += len(chunk)
-        file_content.extend(chunk)
-        if file_size > 32 * 1024 * 1024:  # 32MB
-            raise HTTPException(status_code=400, detail="File too large")
-    
-    # Upload to ImgBB
-    try:
-        upload_result = await upload_to_imgbb(bytes(file_content), file.filename)
-        return {
-            "url": upload_result["url"],
-            "delete_url": upload_result.get("delete_url"),
-            "type": file.content_type
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-
-@app.post("/api/rooms/{room_code}/messages/{message_id}/react")
-async def react_to_message(
-    room_code: str,
-    message_id: str,
-    emoji: str,
-    user_id: str
-):
-    result = await db.rooms.update_one(
-        {
-            "code": room_code,
-            "messages.id": message_id
-        },
-        {
-            "$set": {
-                "messages.$.reactions.emoji": {
-                    "emoji": emoji,
-                    "users": [user_id]
-                }
-            }
-        }
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Message not found")
-    
-    await manager.broadcast(
-        {
-            "type": "reaction",
-            "message_id": message_id,
-            "emoji": emoji,
-            "user_id": user_id
-        },
-        room_code
-    )
-    
-    return {"status": "success"}
-
-@app.post("/api/rooms/{room_code}/messages/{message_id}/reply")
-async def reply_to_message(
-    room_code: str,
-    message_id: str,
-    content: str,
-    sender: str
-):
-    reply = Reply(
-        original_message_id=message_id,
-        content=encrypt_message(content),
-        sender=sender,
-        timestamp=datetime.utcnow()
-    )
-    
-    result = await db.rooms.update_one(
-        {
-            "code": room_code,
-            "messages.id": message_id
-        },
-        {
-            "$push": {
-                "messages.$.replies": reply.dict()
-            }
-        }
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Message not found")
-    
-    # Broadcast the reply
-    reply_dict = reply.dict()
-    reply_dict["content"] = decrypt_message(reply_dict["content"])
-    await manager.broadcast(
-        {
-            "type": "reply",
-            "message_id": message_id,
-            "reply": reply_dict
-        },
-        room_code
-    )
-    
-    return reply_dict
 
 @app.websocket("/ws/{room_code}")
 async def websocket_endpoint(websocket: WebSocket, room_code: str):
@@ -361,27 +238,17 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
                 await manager.broadcast(data, room_code)
             else:
                 message = {
-                    "id": generate_message_id(),
                     "type": "message",
-                    "content": encrypt_message(data["content"]),
+                    "content": data["content"],
                     "sender": data["sender"],
                     "timestamp": datetime.utcnow().isoformat(),
-                    "media_url": data.get("media_url"),
-                    "media_type": data.get("media_type"),
-                    "reactions": {},
-                    "replies": [],
-                    "is_encrypted": True
+                    "image_url": data.get("image_url")  # Add support for image messages
                 }
-                
                 await db.rooms.update_one(
                     {"code": room_code},
                     {"$push": {"messages": message}}
                 )
-                
-                # Decrypt before broadcasting
-                broadcast_message = message.copy()
-                broadcast_message["content"] = data["content"]
-                await manager.broadcast(broadcast_message, room_code)
+                await manager.broadcast(message, room_code)
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_code)
     except Exception as e:
