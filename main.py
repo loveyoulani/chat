@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Optional, List, Any
 from contextlib import asynccontextmanager
 import secrets
 import string
@@ -14,12 +14,58 @@ import jwt
 import os
 import uvicorn
 from fastapi.security import HTTPBearer
+from bson import ObjectId
 
 # Configuration
 MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")  # Default for local development
 JWT_SECRET = os.getenv("JWT", "your-secret-key")   # Default secret key
 DB_NAME = os.getenv("NAME", "chatapp")  # Default database name
 PORT = int(os.getenv("PORT", 10000))  # Default port 10000
+
+# Custom JSON encoders
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(v)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
+
+# Updated Models with proper MongoDB ID handling
+class MessageModel(BaseModel):
+    content: str
+    sender: str
+    timestamp: datetime.datetime
+
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime.datetime: lambda dt: dt.isoformat()
+        }
+
+class ChatRoom(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id")
+    code: str
+    link: str
+    created_at: datetime.datetime
+    expires_at: datetime.datetime
+    messages: List[dict] = []
+
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime.datetime: lambda dt: dt.isoformat()
+        }
+        populate_by_name = True
 
 # Lifespan context manager
 @asynccontextmanager
@@ -61,19 +107,6 @@ app.add_middleware(
 # MongoDB connection
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
-
-# Models
-class ChatRoom(BaseModel):
-    code: str
-    link: str
-    created_at: datetime.datetime
-    expires_at: datetime.datetime
-    messages: List[dict] = []
-
-class Message(BaseModel):
-    content: str
-    sender: str
-    timestamp: datetime.datetime
 
 # Helper functions
 def generate_room_code(length: int = 6) -> str:
@@ -148,8 +181,9 @@ async def create_room():
         "messages": []
     }
     
-    await db.rooms.insert_one(room)
-    return {"code": code, "link": link}
+    result = await db.rooms.insert_one(room)
+    room["_id"] = result.inserted_id
+    return ChatRoom(**room)
 
 @app.get("/api/rooms/{room_code}")
 async def get_room(room_code: str):
@@ -157,7 +191,7 @@ async def get_room(room_code: str):
     room = await db.rooms.find_one({"code": room_code})
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    return room
+    return ChatRoom(**room)
 
 @app.post("/api/rooms/{room_code}/extend")
 async def extend_room(room_code: str):
