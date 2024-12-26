@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from typing import Optional, List
+from contextlib import asynccontextmanager
 import secrets
 import string
 import datetime
@@ -12,7 +13,32 @@ import asyncio
 import jwt, os
 from fastapi.security import HTTPBearer
 
-app = FastAPI()
+# Lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Create indexes and start cleanup task
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+    
+    # Create indexes
+    await db.rooms.create_index([("code", ASCENDING)], unique=True)
+    await db.rooms.create_index([("link", ASCENDING)], unique=True)
+    await db.rooms.create_index([("expires_at", ASCENDING)])
+    
+    # Start cleanup task
+    cleanup_task = asyncio.create_task(cleanup_expired_rooms())
+    
+    yield  # Server is running
+    
+    # Cleanup: Cancel task and close MongoDB connection
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    client.close()
+
+app = FastAPI(lifespan=lifespan)
 security = HTTPBearer()
 
 # CORS configuration for development - adjust in production
@@ -80,7 +106,16 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Routes
+# Cleanup task
+async def cleanup_expired_rooms():
+    """Delete expired rooms"""
+    while True:
+        await db.rooms.delete_many({
+            "expires_at": {"$lt": datetime.datetime.utcnow()}
+        })
+        await asyncio.sleep(86400)  # Run daily
+
+# Routes remain the same
 @app.post("/api/rooms/create")
 async def create_room():
     """Create a new chat room"""
@@ -147,24 +182,3 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
             
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_code)
-
-# Cleanup task
-async def cleanup_expired_rooms():
-    """Delete expired rooms"""
-    while True:
-        await db.rooms.delete_many({
-            "expires_at": {"$lt": datetime.datetime.utcnow()}
-        })
-        await asyncio.sleep(86400)  # Run daily
-
-@app.on_event("startup")
-async def startup_event():
-    """Start background tasks"""
-    asyncio.create_task(cleanup_expired_rooms())
-
-# Create indexes
-@app.on_event("startup")
-async def create_indexes():
-    await db.rooms.create_index([("code", ASCENDING)], unique=True)
-    await db.rooms.create_index([("link", ASCENDING)], unique=True)
-    await db.rooms.create_index([("expires_at", ASCENDING)])
