@@ -1,104 +1,23 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, GetJsonSchemaHandler
-from typing import Optional, List, Any, Annotated
-from contextlib import asynccontextmanager
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict
+from datetime import datetime, timedelta
 import secrets
 import string
-import datetime
 import uuid
 from pymongo import ASCENDING
 import asyncio
-import jwt
 import os
 import uvicorn
-from fastapi.security import HTTPBearer
-from bson import ObjectId
-from pydantic.json_schema import JsonSchemaValue
 
 # Configuration
 MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")
-JWT_SECRET = os.getenv("JWT", "your-secret-key")
-DB_NAME = os.getenv("NAME", "chatapp")
+DB_NAME = os.getenv("NAME", "sayit")
 PORT = int(os.getenv("PORT", 10000))
 
-# Custom ObjectId field
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls, _schema_generator: GetJsonSchemaHandler
-    ) -> JsonSchemaValue:
-        return {"type": "string"}
-
-# Models
-class MessageModel(BaseModel):
-    content: str
-    sender: str
-    timestamp: datetime.datetime
-
-    class Config:
-        arbitrary_types_allowed = True
-        json_encoders = {
-            datetime.datetime: lambda dt: dt.isoformat()
-        }
-
-class ChatRoom(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    code: str
-    link: str
-    created_at: datetime.datetime
-    expires_at: datetime.datetime
-    messages: List[dict] = []
-
-    class Config:
-        arbitrary_types_allowed = True
-        populate_by_name = True
-        json_encoders = {
-            ObjectId: str,
-            datetime.datetime: lambda dt: dt.isoformat()
-        }
-
-    def dict(self, *args, **kwargs):
-        # Customize the dict representation
-        room_dict = super().dict(*args, **kwargs)
-        if room_dict.get("_id"):
-            room_dict["_id"] = str(room_dict["_id"])
-        return room_dict
-
-# Lifespan context manager
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client[DB_NAME]
-    
-    await db.rooms.create_index([("code", ASCENDING)], unique=True)
-    await db.rooms.create_index([("link", ASCENDING)], unique=True)
-    await db.rooms.create_index([("expires_at", ASCENDING)])
-    
-    cleanup_task = asyncio.create_task(cleanup_expired_rooms())
-    
-    yield
-    
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-    client.close()
-
-app = FastAPI(lifespan=lifespan)
-security = HTTPBearer()
+app = FastAPI(title="Sayit Backend")
 
 # CORS configuration
 app.add_middleware(
@@ -113,101 +32,101 @@ app.add_middleware(
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-# Helper functions
-def generate_room_code(length: int = 6) -> str:
-    alphabet = string.ascii_uppercase + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
-
-def generate_short_link() -> str:
-    return str(uuid.uuid4())[:8]
-
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: dict = {}
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.user_counts: Dict[str, int] = {}
 
     async def connect(self, websocket: WebSocket, room_code: str):
         await websocket.accept()
         if room_code not in self.active_connections:
             self.active_connections[room_code] = []
+            self.user_counts[room_code] = 0
         self.active_connections[room_code].append(websocket)
+        self.user_counts[room_code] += 1
+        await self.broadcast_user_count(room_code)
 
     def disconnect(self, websocket: WebSocket, room_code: str):
         if room_code in self.active_connections:
             self.active_connections[room_code].remove(websocket)
-            if not self.active_connections[room_code]:
+            self.user_counts[room_code] -= 1
+            if self.user_counts[room_code] <= 0:
                 del self.active_connections[room_code]
+                del self.user_counts[room_code]
+            else:
+                asyncio.create_task(self.broadcast_user_count(room_code))
+
+    async def broadcast_user_count(self, room_code: str):
+        if room_code in self.active_connections:
+            count = self.user_counts[room_code]
+            await self.broadcast(
+                {"type": "user_count", "count": count},
+                room_code
+            )
 
     async def broadcast(self, message: dict, room_code: str):
         if room_code in self.active_connections:
             for connection in self.active_connections[room_code]:
-                await connection.send_json(message)
+                try:
+                    await connection.send_json(message)
+                except:
+                    continue
 
 manager = ConnectionManager()
 
-# Cleanup task
+def generate_room_code(length: int = 6) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+@app.on_event("startup")
+async def startup_event():
+    await db.rooms.create_index([("code", ASCENDING)], unique=True)
+    await db.rooms.create_index([("expires_at", ASCENDING)])
+    asyncio.create_task(cleanup_expired_rooms())
+
 async def cleanup_expired_rooms():
     while True:
         try:
             await db.rooms.delete_many({
-                "expires_at": {"$lt": datetime.datetime.utcnow()}
+                "expires_at": {"$lt": datetime.utcnow()}
             })
-            await asyncio.sleep(86400)  # Run daily
+            await asyncio.sleep(3600)  # Run hourly
         except Exception as e:
             print(f"Error in cleanup task: {e}")
-            await asyncio.sleep(300)  # Wait 5 minutes before retrying
+            await asyncio.sleep(300)
 
-# Routes
 @app.get("/")
 async def root():
     return {
         "status": "healthy",
-        "timestamp": datetime.datetime.utcnow().isoformat()
+        "app": "Sayit",
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 @app.post("/api/rooms/create")
 async def create_room():
     code = generate_room_code()
-    link = generate_short_link()
-    
     while await db.rooms.find_one({"code": code}):
         code = generate_room_code()
-    while await db.rooms.find_one({"link": link}):
-        link = generate_short_link()
     
     room = {
         "code": code,
-        "link": link,
-        "created_at": datetime.datetime.utcnow(),
-        "expires_at": datetime.datetime.utcnow() + datetime.timedelta(days=7),
+        "created_at": datetime.utcnow(),
+        "expires_at": datetime.utcnow() + timedelta(days=1),
         "messages": []
     }
     
-    result = await db.rooms.insert_one(room)
-    room["_id"] = result.inserted_id
-    return {"code": code, "link": link}
+    await db.rooms.insert_one(room)
+    return {"code": code}
 
 @app.get("/api/rooms/{room_code}")
 async def get_room(room_code: str):
-    room_dict = await db.rooms.find_one({"code": room_code})
-    if not room_dict:
+    room = await db.rooms.find_one({"code": room_code})
+    if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    
-    # Convert ObjectId to string
-    if room_dict.get("_id"):
-        room_dict["_id"] = str(room_dict["_id"])
-        
-    return room_dict
-
-@app.post("/api/rooms/{room_code}/extend")
-async def extend_room(room_code: str):
-    result = await db.rooms.update_one(
-        {"code": room_code},
-        {"$set": {"expires_at": datetime.datetime.utcnow() + datetime.timedelta(days=7)}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Room not found")
-    return {"message": "Room extended successfully"}
+    room["_id"] = str(room["_id"])
+    return room
 
 @app.websocket("/ws/{room_code}")
 async def websocket_endpoint(websocket: WebSocket, room_code: str):
@@ -215,20 +134,23 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
     try:
         while True:
             data = await websocket.receive_json()
-            message = {
-                "content": data["content"],
-                "sender": data["sender"],
-                "timestamp": datetime.datetime.utcnow().isoformat()
-            }
-            
-            await db.rooms.update_one(
-                {"code": room_code},
-                {"$push": {"messages": message}}
-            )
-            
-            await manager.broadcast(message, room_code)
-            
+            if data.get("type") == "typing":
+                await manager.broadcast(data, room_code)
+            else:
+                message = {
+                    "content": data["content"],
+                    "sender": data["sender"],
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await db.rooms.update_one(
+                    {"code": room_code},
+                    {"$push": {"messages": message}}
+                )
+                await manager.broadcast(message, room_code)
     except WebSocketDisconnect:
+        manager.disconnect(websocket, room_code)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
         manager.disconnect(websocket, room_code)
 
 if __name__ == "__main__":
