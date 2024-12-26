@@ -10,8 +10,16 @@ import datetime
 import uuid
 from pymongo import ASCENDING
 import asyncio
-import jwt, os
+import jwt
+import os
+import uvicorn
 from fastapi.security import HTTPBearer
+
+# Configuration
+MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")  # Default for local development
+JWT_SECRET = os.getenv("JWT", "your-secret-key")   # Default secret key
+DB_NAME = os.getenv("NAME", "chatapp")  # Default database name
+PORT = int(os.getenv("PORT", 10000))  # Default port 10000
 
 # Lifespan context manager
 @asynccontextmanager
@@ -28,7 +36,7 @@ async def lifespan(app: FastAPI):
     # Start cleanup task
     cleanup_task = asyncio.create_task(cleanup_expired_rooms())
     
-    yield  # Server is running
+    yield
     
     # Cleanup: Cancel task and close MongoDB connection
     cleanup_task.cancel()
@@ -41,7 +49,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 security = HTTPBearer()
 
-# CORS configuration for development - adjust in production
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Replace with your frontend domain in production
@@ -49,11 +57,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configuration
-MONGO_URL = os.getenv("DB_URL")  # Replace with your MongoDB URL
-JWT_SECRET = os.getenv("JWT")   # Replace with a secure secret key
-DB_NAME = os.getenv("NAME")
 
 # MongoDB connection
 client = AsyncIOMotorClient(MONGO_URL)
@@ -110,12 +113,21 @@ manager = ConnectionManager()
 async def cleanup_expired_rooms():
     """Delete expired rooms"""
     while True:
-        await db.rooms.delete_many({
-            "expires_at": {"$lt": datetime.datetime.utcnow()}
-        })
-        await asyncio.sleep(86400)  # Run daily
+        try:
+            await db.rooms.delete_many({
+                "expires_at": {"$lt": datetime.datetime.utcnow()}
+            })
+            await asyncio.sleep(86400)  # Run daily
+        except Exception as e:
+            print(f"Error in cleanup task: {e}")
+            await asyncio.sleep(300)  # Wait 5 minutes before retrying
 
-# Routes remain the same
+# Routes
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"status": "healthy", "timestamp": datetime.datetime.utcnow()}
+
 @app.post("/api/rooms/create")
 async def create_room():
     """Create a new chat room"""
@@ -182,3 +194,6 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
             
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_code)
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
