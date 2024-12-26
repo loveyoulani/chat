@@ -6,3 +6,5 @@ pydantic
 websockets
 asyncio
 aiohttp
+python-multipart
+cryptography
