@@ -151,41 +151,23 @@ async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUpl
         
         try:
             async with aiohttp.ClientSession() as session:
-                # Create multipart form-data
-                form = aiohttp.FormData()
-                form.add_field(
-                    'key',
-                    IMGBB_API_KEY,
-                    content_type='text/plain'
-                )
-                
-                # Add the image as base64
+                # Convert image to base64 with proper data URI prefix
                 base64_image = base64.b64encode(encrypted_data).decode('utf-8')
-                form.add_field(
-                    'image',
-                    base64_image,
-                    content_type='text/plain'
-                )
                 
-                # Add optional fields
-                if file.filename:
-                    form.add_field(
-                        'name',
-                        file.filename,
-                        content_type='text/plain'
-                    )
-                
-                form.add_field(
-                    'expiration',
-                    '15552000',  # 180 days
-                    content_type='text/plain'
-                )
-                
+                # Create the form data as a regular dictionary
+                payload = {
+                    'key': IMGBB_API_KEY,
+                    'image': base64_image,  # Send raw base64 without data URI prefix
+                }
+
                 # Make the POST request
                 async with session.post(
                     'https://api.imgbb.com/1/upload',
-                    data=form,
-                    headers={'Accept': 'application/json'}
+                    data=payload,  # Use data instead of json
+                    headers={
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
