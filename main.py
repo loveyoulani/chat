@@ -1,13 +1,11 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from pydantic import BaseModel
+from typing import Dict, List
 from datetime import datetime, timedelta
 import secrets
 import string
-import uuid
-from pymongo import ASCENDING
 import asyncio
 import os
 import uvicorn
@@ -81,8 +79,17 @@ def generate_room_code(length: int = 6) -> str:
 
 @app.on_event("startup")
 async def startup_event():
-    await db.rooms.create_index([("code", ASCENDING)], unique=True)
-    await db.rooms.create_index([("expires_at", ASCENDING)])
+    # Drop any existing indexes to prevent conflicts
+    try:
+        await db.rooms.drop_indexes()
+    except Exception:
+        pass
+    
+    # Create new indexes
+    await db.rooms.create_index([("code", 1)], unique=True)
+    await db.rooms.create_index([("expires_at", 1)])
+    
+    # Start cleanup task
     asyncio.create_task(cleanup_expired_rooms())
 
 async def cleanup_expired_rooms():
@@ -106,19 +113,23 @@ async def root():
 
 @app.post("/api/rooms/create")
 async def create_room():
-    code = generate_room_code()
-    while await db.rooms.find_one({"code": code}):
-        code = generate_room_code()
-    
-    room = {
-        "code": code,
-        "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(days=1),
-        "messages": []
-    }
-    
-    await db.rooms.insert_one(room)
-    return {"code": code}
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            code = generate_room_code()
+            room = {
+                "code": code,
+                "created_at": datetime.utcnow(),
+                "expires_at": datetime.utcnow() + timedelta(days=1),
+                "messages": []
+            }
+            
+            await db.rooms.insert_one(room)
+            return {"code": code}
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                raise HTTPException(status_code=500, detail="Failed to create room")
+            continue
 
 @app.get("/api/rooms/{room_code}")
 async def get_room(room_code: str):
@@ -138,6 +149,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
                 await manager.broadcast(data, room_code)
             else:
                 message = {
+                    "type": "message",
                     "content": data["content"],
                     "sender": data["sender"],
                     "timestamp": datetime.utcnow().isoformat()
