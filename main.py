@@ -130,24 +130,40 @@ async def upload_to_imgbb(image_data: bytes, filename: str) -> dict:
     if not IMGBB_API_KEY:
         raise HTTPException(status_code=500, detail="ImgBB API key not configured")
 
+    # Base64 encode with proper formatting
     base64_image = base64.b64encode(image_data).decode('utf-8')
     
     async with aiohttp.ClientSession() as session:
-        url = f"https://api.imgbb.com/1/upload"
-        params = {
-            "key": IMGBB_API_KEY,
-            "expiration": 600  # 10 minutes expiration
-        }
-        data = {
-            "image": base64_image,
-            "name": filename
-        }
+        url = "https://api.imgbb.com/1/upload"
         
-        async with session.post(url, params=params, data=data) as response:
-            result = await response.json()
-            if not result.get("success"):
-                raise HTTPException(status_code=500, detail="Failed to upload image")
-            return result
+        # Properly structure form data
+        form = aiohttp.FormData()
+        form.add_field('key', IMGBB_API_KEY)
+        form.add_field('image', base64_image)
+        
+        if filename:
+            form.add_field('name', filename)
+            
+        # Optional: Add expiration (in seconds, between 60 and 15552000)
+        form.add_field('expiration', str(15552000))  # 180 days
+        
+        try:
+            async with session.post(url, data=form) as response:
+                result = await response.json()
+                
+                if not result.get("success"):
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    print(f"ImgBB upload error: {error_msg}")  # Add logging
+                    raise HTTPException(status_code=500, detail=f"Failed to upload image: {error_msg}")
+                    
+                return result
+                
+        except aiohttp.ClientError as e:
+            print(f"Network error during upload: {str(e)}")  # Add logging
+            raise HTTPException(status_code=500, detail=f"Network error: {str(e)}")
+        except Exception as e:
+            print(f"Unexpected error during upload: {str(e)}")  # Add logging
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload-image/{room_code}")
 async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUploadResponse:
@@ -158,44 +174,74 @@ async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUpl
         if not room:
             return ImageUploadResponse(success=False, error="Room not found")
 
-        # Read and validate file size
+        # Read and validate file
         image_data = await file.read()
         if len(image_data) > MAX_IMAGE_SIZE:
             return ImageUploadResponse(success=False, error="Image size exceeds 32MB limit")
+
+        # Validate file type
+        content_type = file.content_type
+        if not content_type or not content_type.startswith('image/'):
+            return ImageUploadResponse(success=False, error="Invalid file type. Only images are allowed.")
 
         # Encrypt image
         encrypted_data, encrypted_key = encrypt_image(image_data)
         
         # Upload encrypted image to ImgBB
-        result = await upload_to_imgbb(encrypted_data, file.filename)
+        try:
+            result = await upload_to_imgbb(encrypted_data, file.filename)
+            
+            if not result.get("data", {}).get("url"):
+                return ImageUploadResponse(success=False, error="No URL in ImgBB response")
+                
+            return ImageUploadResponse(
+                success=True,
+                image_url=result["data"]["url"],
+                encrypted_key=encrypted_key
+            )
+            
+        except HTTPException as e:
+            return ImageUploadResponse(success=False, error=str(e.detail))
         
-        return ImageUploadResponse(
-            success=True,
-            image_url=result["data"]["url"],
-            encrypted_key=encrypted_key
-        )
-
     except Exception as e:
-        return ImageUploadResponse(success=False, error=str(e))
+        print(f"Upload error: {str(e)}")  # Add logging
+        return ImageUploadResponse(success=False, error=f"Upload failed: {str(e)}")
 
-@app.get("/api/images/decrypt")
-async def decrypt_image_url(image_url: str, encrypted_key: str):
+@app.post("/api/images/decrypt")
+async def decrypt_image_url(request: Request):
     """Fetch and decrypt an image from its URL."""
     try:
+        # Get request body
+        body = await request.json()
+        image_url = body.get('image_url')
+        encrypted_key = body.get('encrypted_key')
+        
+        if not image_url or not encrypted_key:
+            raise HTTPException(status_code=400, detail="Missing image_url or encrypted_key")
+
         async with aiohttp.ClientSession() as session:
             async with session.get(image_url) as response:
                 if response.status != 200:
                     raise HTTPException(status_code=404, detail="Image not found")
                 
                 encrypted_data = await response.read()
-                decrypted_data = decrypt_image(encrypted_data, encrypted_key)
+                
+                try:
+                    decrypted_data = decrypt_image(encrypted_data, encrypted_key)
+                except Exception as e:
+                    print(f"Decryption error: {str(e)}")
+                    raise HTTPException(status_code=400, detail="Failed to decrypt image")
                 
                 # Return decrypted image in base64 format
                 return {
                     "success": True,
                     "image_data": base64.b64encode(decrypted_data).decode('utf-8')
                 }
+                
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"Unexpected error in decrypt_image_url: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def ping_self():
