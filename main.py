@@ -9,11 +9,13 @@ import string
 import asyncio
 import os
 import uvicorn
+import aiohttp
 
 # Configuration
 MONGO_URL = os.getenv("DB_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("NAME", "sayit")
 PORT = int(os.getenv("PORT", 10000))
+APP_URL = os.getenv("APP_URL", "http://localhost:10000")  # Add your Render URL here
 
 app = FastAPI(title="Sayit Backend")
 
@@ -47,13 +49,16 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket, room_code: str):
         if room_code in self.active_connections:
-            self.active_connections[room_code].remove(websocket)
-            self.user_counts[room_code] -= 1
-            if self.user_counts[room_code] <= 0:
-                del self.active_connections[room_code]
-                del self.user_counts[room_code]
-            else:
-                asyncio.create_task(self.broadcast_user_count(room_code))
+            try:
+                self.active_connections[room_code].remove(websocket)
+                self.user_counts[room_code] -= 1
+                if self.user_counts[room_code] <= 0:
+                    del self.active_connections[room_code]
+                    del self.user_counts[room_code]
+                else:
+                    asyncio.create_task(self.broadcast_user_count(room_code))
+            except ValueError:
+                pass  # Handle case where websocket is already removed
 
     async def broadcast_user_count(self, room_code: str):
         if room_code in self.active_connections:
@@ -65,13 +70,34 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict, room_code: str):
         if room_code in self.active_connections:
+            disconnected = []
             for connection in self.active_connections[room_code]:
                 try:
                     await connection.send_json(message)
-                except:
-                    continue
+                except WebSocketDisconnect:
+                    disconnected.append(connection)
+                except Exception:
+                    disconnected.append(connection)
+            
+            # Clean up disconnected clients
+            for connection in disconnected:
+                self.disconnect(connection, room_code)
 
 manager = ConnectionManager()
+
+async def ping_self():
+    """Periodically ping the application to keep it active."""
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(f"{APP_URL}/") as response:
+                    if response.status == 200:
+                        print(f"Self-ping successful at {datetime.utcnow()}")
+                    else:
+                        print(f"Self-ping failed with status {response.status}")
+            except Exception as e:
+                print(f"Self-ping error: {e}")
+            await asyncio.sleep(600)  # Ping every 10 minutes
 
 def generate_room_code(length: int = 6) -> str:
     alphabet = string.ascii_uppercase + string.digits
@@ -89,15 +115,25 @@ async def startup_event():
     await db.rooms.create_index([("code", 1)], unique=True)
     await db.rooms.create_index([("expires_at", 1)])
     
-    # Start cleanup task
-    asyncio.create_task(cleanup_expired_rooms())
+    # Start background tasks
+    app.state.cleanup_task = asyncio.create_task(cleanup_expired_rooms())
+    app.state.ping_task = asyncio.create_task(ping_self())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Clean up background tasks
+    if hasattr(app.state, 'cleanup_task'):
+        app.state.cleanup_task.cancel()
+    if hasattr(app.state, 'ping_task'):
+        app.state.ping_task.cancel()
 
 async def cleanup_expired_rooms():
     while True:
         try:
-            await db.rooms.delete_many({
+            result = await db.rooms.delete_many({
                 "expires_at": {"$lt": datetime.utcnow()}
             })
+            print(f"Cleaned up {result.deleted_count} expired rooms")
             await asyncio.sleep(3600)  # Run hourly
         except Exception as e:
             print(f"Error in cleanup task: {e}")
