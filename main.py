@@ -43,7 +43,6 @@ app.add_middleware(
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -101,6 +100,7 @@ class ImageUploadResponse(BaseModel):
     image_url: Optional[str] = None
     encrypted_key: Optional[str] = None
     error: Optional[str] = None
+
 
 def encrypt_image(image_data: bytes) -> tuple[bytes, str]:
     """Encrypt image data and return encrypted data with key."""
@@ -198,42 +198,6 @@ async def decrypt_image_url(image_url: str, encrypted_key: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/rooms/{room_code}")
-async def get_room(room_code: str):
-    room = await db.rooms.find_one({"code": room_code})
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-    room["_id"] = str(room["_id"])
-    return room
-
-
-@app.websocket("/ws/{room_code}")
-async def websocket_endpoint(websocket: WebSocket, room_code: str):
-    await manager.connect(websocket, room_code)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            if data.get("type") == "typing":
-                await manager.broadcast(data, room_code)
-            else:
-                message = {
-                    "type": "message",
-                    "content": data["content"],
-                    "sender": data["sender"],
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "image_url": data.get("image_url"),
-                    "encrypted_key": data.get("encrypted_key")  # Store encryption key with message
-                }
-                await db.rooms.update_one(
-                    {"code": room_code},
-                    {"$push": {"messages": message}}
-                )
-                await manager.broadcast(message, room_code)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, room_code)
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        manager.disconnect(websocket, room_code)
 async def ping_self():
     """Periodically ping the application to keep it active."""
     async with aiohttp.ClientSession() as session:
@@ -311,5 +275,42 @@ async def create_room():
             if attempt == max_attempts - 1:
                 raise HTTPException(status_code=500, detail="Failed to create room")
             continue
+
+@app.get("/api/rooms/{room_code}")
+async def get_room(room_code: str):
+    room = await db.rooms.find_one({"code": room_code})
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    room["_id"] = str(room["_id"])
+    return room
+
+@app.websocket("/ws/{room_code}")
+async def websocket_endpoint(websocket: WebSocket, room_code: str):
+    await manager.connect(websocket, room_code)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "typing":
+                await manager.broadcast(data, room_code)
+            else:
+                message = {
+                    "type": "message",
+                    "content": data["content"],
+                    "sender": data["sender"],
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "image_url": data.get("image_url"),
+                    "encrypted_key": data.get("encrypted_key")  # Store encryption key with message
+                }
+                await db.rooms.update_one(
+                    {"code": room_code},
+                    {"$push": {"messages": message}}
+                )
+                await manager.broadcast(message, room_code)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, room_code)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        manager.disconnect(websocket, room_code)
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
