@@ -149,27 +149,61 @@ async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUpl
         # Encrypt image
         encrypted_data, encrypted_key = encrypt_image(image_data)
         
-        # Upload encrypted image to ImgBB
         try:
-            # Add name parameter to ensure proper file identification
-            name = file.filename or f"image_{datetime.utcnow().timestamp()}"
-            
-            # Create proper form data for ImgBB
-            form_data = {
-                'key': IMGBB_API_KEY,
-                'image': base64.b64encode(encrypted_data).decode('utf-8'),
-                'name': name,
-                'expiration': 15552000  # 180 days
-            }
-            
             async with aiohttp.ClientSession() as session:
-                async with session.post('https://api.imgbb.com/1/upload', data=form_data) as response:
+                # Create multipart form-data
+                form = aiohttp.FormData()
+                form.add_field(
+                    'key',
+                    IMGBB_API_KEY,
+                    content_type='text/plain'
+                )
+                
+                # Add the image as base64
+                base64_image = base64.b64encode(encrypted_data).decode('utf-8')
+                form.add_field(
+                    'image',
+                    base64_image,
+                    content_type='text/plain'
+                )
+                
+                # Add optional fields
+                if file.filename:
+                    form.add_field(
+                        'name',
+                        file.filename,
+                        content_type='text/plain'
+                    )
+                
+                form.add_field(
+                    'expiration',
+                    '15552000',  # 180 days
+                    content_type='text/plain'
+                )
+                
+                # Make the POST request
+                async with session.post(
+                    'https://api.imgbb.com/1/upload',
+                    data=form,
+                    headers={'Accept': 'application/json'}
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        print(f"ImgBB API error: Status {response.status}, Response: {error_text}")
+                        return ImageUploadResponse(
+                            success=False,
+                            error=f"ImgBB API error: {error_text}"
+                        )
+                    
                     result = await response.json()
                     
                     if not result.get("success"):
                         error_msg = result.get("error", {}).get("message", "Unknown error")
                         print(f"ImgBB upload error: {error_msg}")
-                        return ImageUploadResponse(success=False, error=f"ImgBB upload failed: {error_msg}")
+                        return ImageUploadResponse(
+                            success=False,
+                            error=f"ImgBB upload failed: {error_msg}"
+                        )
                     
                     return ImageUploadResponse(
                         success=True,
@@ -179,11 +213,17 @@ async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUpl
             
         except aiohttp.ClientError as e:
             print(f"Network error during upload: {str(e)}")
-            return ImageUploadResponse(success=False, error=f"Network error: {str(e)}")
+            return ImageUploadResponse(
+                success=False,
+                error=f"Network error: {str(e)}"
+            )
         
     except Exception as e:
         print(f"Upload error: {str(e)}")
-        return ImageUploadResponse(success=False, error=f"Upload failed: {str(e)}")
+        return ImageUploadResponse(
+            success=False,
+            error=f"Upload failed: {str(e)}"
+        )
 
 @app.post("/api/images/decrypt")
 async def decrypt_image_url(request: Request):
