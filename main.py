@@ -9,7 +9,7 @@ import datetime
 import uuid
 from pymongo import ASCENDING
 import asyncio
-import jwt , os
+import jwt, os
 from fastapi.security import HTTPBearer
 
 app = FastAPI()
