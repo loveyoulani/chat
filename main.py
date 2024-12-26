@@ -9,7 +9,7 @@ import datetime
 import uuid
 from pymongo import ASCENDING
 import asyncio
-import jwt
+import jwt , os
 from fastapi.security import HTTPBearer
 
 app = FastAPI()
@@ -25,9 +25,9 @@ app.add_middleware(
 )
 
 # Configuration
-MONGO_URL = "your_mongodb_url"  # Replace with your MongoDB URL
-JWT_SECRET = "your_jwt_secret"   # Replace with a secure secret key
-DB_NAME = "anonymous_chat"
+MONGO_URL = os.getenv("DB_URL")  # Replace with your MongoDB URL
+JWT_SECRET = os.getenv("JWT")   # Replace with a secure secret key
+DB_NAME = os.getenv("NAME")
 
 # MongoDB connection
 client = AsyncIOMotorClient(MONGO_URL)
