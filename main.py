@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File,Request
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
-from cryptography.fernet import Fernet
 import secrets
 import string
 import asyncio
@@ -21,13 +20,6 @@ APP_URL = os.getenv("APP_URL", "http://localhost:10000")
 IMGBB_API_KEY = os.getenv("IMGBB_API_KEY")
 MAX_IMAGE_SIZE = 32 * 1024 * 1024  # 32 MB in bytes
 
-# Generate encryption key if not exists
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
-if not ENCRYPTION_KEY:
-    ENCRYPTION_KEY = Fernet.generate_key()
-    print("Generated new encryption key:", ENCRYPTION_KEY.decode())
-fernet = Fernet(ENCRYPTION_KEY)
-
 app = FastAPI(title="Sayit Backend")
 
 # CORS configuration
@@ -43,6 +35,7 @@ app.add_middleware(
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
+# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -98,151 +91,56 @@ manager = ConnectionManager()
 class ImageUploadResponse(BaseModel):
     success: bool
     image_url: Optional[str] = None
-    encrypted_key: Optional[str] = None
     error: Optional[str] = None
 
+async def upload_to_imgbb(image_data: bytes, filename: str) -> dict:
+    """Upload an image to ImgBB and return the response."""
+    if not IMGBB_API_KEY:
+        raise HTTPException(status_code=500, detail="ImgBB API key not configured")
 
-def encrypt_image(image_data: bytes) -> tuple[bytes, str]:
-    """Encrypt image data and return encrypted data with key."""
-    # Generate a unique key for this image
-    image_key = Fernet.generate_key()
-    image_fernet = Fernet(image_key)
+    base64_image = base64.b64encode(image_data).decode('utf-8')
     
-    # Encrypt the image
-    encrypted_data = image_fernet.encrypt(image_data)
-    
-    # Encrypt the image key with master key
-    encrypted_key = fernet.encrypt(image_key).decode()
-    
-    return encrypted_data, encrypted_key
-
-def decrypt_image(encrypted_data: bytes, encrypted_key: str) -> bytes:
-    """Decrypt image data using the encrypted key."""
-    # Decrypt the image key
-    image_key = fernet.decrypt(encrypted_key.encode())
-    image_fernet = Fernet(image_key)
-    
-    # Decrypt the image
-    return image_fernet.decrypt(encrypted_data)
-
-
+    async with aiohttp.ClientSession() as session:
+        url = f"https://api.imgbb.com/1/upload"
+        params = {
+            "key": IMGBB_API_KEY,
+            "expiration": 600  # 10 minutes expiration
+        }
+        data = {
+            "image": base64_image,
+            "name": filename
+        }
+        
+        async with session.post(url, params=params, data=data) as response:
+            result = await response.json()
+            if not result.get("success"):
+                raise HTTPException(status_code=500, detail="Failed to upload image")
+            return result
 
 @app.post("/api/upload-image/{room_code}")
 async def upload_image(room_code: str, file: UploadFile = File(...)) -> ImageUploadResponse:
-    """Upload an encrypted image and return the URL with encryption key."""
+    """Upload an image and return the URL."""
     try:
         # Verify room exists
         room = await db.rooms.find_one({"code": room_code})
         if not room:
             return ImageUploadResponse(success=False, error="Room not found")
 
-        # Read and validate file
+        # Read and validate file size
         image_data = await file.read()
         if len(image_data) > MAX_IMAGE_SIZE:
             return ImageUploadResponse(success=False, error="Image size exceeds 32MB limit")
 
-        # Validate file type
-        content_type = file.content_type
-        if not content_type or not content_type.startswith('image/'):
-            return ImageUploadResponse(success=False, error="Invalid file type. Only images are allowed.")
-
-        # Encrypt image
-        encrypted_data, encrypted_key = encrypt_image(image_data)
+        # Upload to ImgBB
+        result = await upload_to_imgbb(image_data, file.filename)
         
-        try:
-            async with aiohttp.ClientSession() as session:
-                # Convert image to base64 with proper data URI prefix
-                base64_image = base64.b64encode(encrypted_data).decode('utf-8')
-                
-                # Create the form data as a regular dictionary
-                payload = {
-                    'key': IMGBB_API_KEY,
-                    'image': base64_image,  # Send raw base64 without data URI prefix
-                }
-
-                # Make the POST request
-                async with session.post(
-                    'https://api.imgbb.com/1/upload',
-                    data=payload,  # Use data instead of json
-                    headers={
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        print(f"ImgBB API error: Status {response.status}, Response: {error_text}")
-                        return ImageUploadResponse(
-                            success=False,
-                            error=f"ImgBB API error: {error_text}"
-                        )
-                    
-                    result = await response.json()
-                    
-                    if not result.get("success"):
-                        error_msg = result.get("error", {}).get("message", "Unknown error")
-                        print(f"ImgBB upload error: {error_msg}")
-                        return ImageUploadResponse(
-                            success=False,
-                            error=f"ImgBB upload failed: {error_msg}"
-                        )
-                    
-                    return ImageUploadResponse(
-                        success=True,
-                        image_url=result["data"]["url"],
-                        encrypted_key=encrypted_key
-                    )
-            
-        except aiohttp.ClientError as e:
-            print(f"Network error during upload: {str(e)}")
-            return ImageUploadResponse(
-                success=False,
-                error=f"Network error: {str(e)}"
-            )
-        
-    except Exception as e:
-        print(f"Upload error: {str(e)}")
         return ImageUploadResponse(
-            success=False,
-            error=f"Upload failed: {str(e)}"
+            success=True,
+            image_url=result["data"]["url"]
         )
 
-@app.post("/api/images/decrypt")
-async def decrypt_image_url(request: Request):
-    """Fetch and decrypt an image from its URL."""
-    try:
-        # Get request body
-        body = await request.json()
-        image_url = body.get('image_url')
-        encrypted_key = body.get('encrypted_key')
-        
-        if not image_url or not encrypted_key:
-            raise HTTPException(status_code=400, detail="Missing image_url or encrypted_key")
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(image_url) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=404, detail="Image not found")
-                
-                encrypted_data = await response.read()
-                
-                try:
-                    decrypted_data = decrypt_image(encrypted_data, encrypted_key)
-                except Exception as e:
-                    print(f"Decryption error: {str(e)}")
-                    raise HTTPException(status_code=400, detail="Failed to decrypt image")
-                
-                # Return decrypted image in base64 format
-                return {
-                    "success": True,
-                    "image_data": base64.b64encode(decrypted_data).decode('utf-8')
-                }
-                
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"Unexpected error in decrypt_image_url: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return ImageUploadResponse(success=False, error=str(e))
 
 async def ping_self():
     """Periodically ping the application to keep it active."""
@@ -344,8 +242,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
                     "content": data["content"],
                     "sender": data["sender"],
                     "timestamp": datetime.utcnow().isoformat(),
-                    "image_url": data.get("image_url"),
-                    "encrypted_key": data.get("encrypted_key")  # Store encryption key with message
+                    "image_url": data.get("image_url")  # Add support for image messages
                 }
                 await db.rooms.update_one(
                     {"code": room_code},
