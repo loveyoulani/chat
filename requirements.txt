@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 motor
-python-jwt
+pyjwt
 pydantic
 websockets
