@@ -198,6 +198,15 @@ async def decrypt_image_url(image_url: str, encrypted_key: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/rooms/{room_code}")
+async def get_room(room_code: str):
+    room = await db.rooms.find_one({"code": room_code})
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    room["_id"] = str(room["_id"])
+    return room
+
+
 @app.websocket("/ws/{room_code}")
 async def websocket_endpoint(websocket: WebSocket, room_code: str):
     await manager.connect(websocket, room_code)
@@ -225,6 +234,82 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
     except Exception as e:
         print(f"WebSocket error: {e}")
         manager.disconnect(websocket, room_code)
+async def ping_self():
+    """Periodically ping the application to keep it active."""
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(f"{APP_URL}/") as response:
+                    if response.status == 200:
+                        print(f"Self-ping successful at {datetime.utcnow()}")
+                    else:
+                        print(f"Self-ping failed with status {response.status}")
+            except Exception as e:
+                print(f"Self-ping error: {e}")
+            await asyncio.sleep(600)
 
+def generate_room_code(length: int = 6) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        await db.rooms.drop_indexes()
+    except Exception:
+        pass
+    
+    await db.rooms.create_index([("code", 1)], unique=True)
+    await db.rooms.create_index([("expires_at", 1)])
+    
+    app.state.cleanup_task = asyncio.create_task(cleanup_expired_rooms())
+    app.state.ping_task = asyncio.create_task(ping_self())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if hasattr(app.state, 'cleanup_task'):
+        app.state.cleanup_task.cancel()
+    if hasattr(app.state, 'ping_task'):
+        app.state.ping_task.cancel()
+
+async def cleanup_expired_rooms():
+    while True:
+        try:
+            result = await db.rooms.delete_many({
+                "expires_at": {"$lt": datetime.utcnow()}
+            })
+            print(f"Cleaned up {result.deleted_count} expired rooms")
+            await asyncio.sleep(3600)
+        except Exception as e:
+            print(f"Error in cleanup task: {e}")
+            await asyncio.sleep(300)
+
+@app.get("/")
+async def root():
+    return {
+        "status": "healthy",
+        "app": "Sayit",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.post("/api/rooms/create")
+async def create_room():
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            code = generate_room_code()
+            room = {
+                "code": code,
+                "created_at": datetime.utcnow(),
+                "expires_at": datetime.utcnow() + timedelta(days=1),
+                "messages": []
+            }
+            
+            await db.rooms.insert_one(room)
+            return {"code": code}
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                raise HTTPException(status_code=500, detail="Failed to create room")
+            continue
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
