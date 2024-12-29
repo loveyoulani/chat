@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import secrets
 import string
 import asyncio
@@ -168,29 +168,12 @@ async def startup_event():
         pass
     
     await db.rooms.create_index([("code", 1)], unique=True)
-    await db.rooms.create_index([("expires_at", 1)])
-    
-    app.state.cleanup_task = asyncio.create_task(cleanup_expired_rooms())
     app.state.ping_task = asyncio.create_task(ping_self())
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    if hasattr(app.state, 'cleanup_task'):
-        app.state.cleanup_task.cancel()
     if hasattr(app.state, 'ping_task'):
         app.state.ping_task.cancel()
-
-async def cleanup_expired_rooms():
-    while True:
-        try:
-            result = await db.rooms.delete_many({
-                "expires_at": {"$lt": datetime.utcnow()}
-            })
-            print(f"Cleaned up {result.deleted_count} expired rooms")
-            await asyncio.sleep(3600)
-        except Exception as e:
-            print(f"Error in cleanup task: {e}")
-            await asyncio.sleep(300)
 
 @app.get("/")
 async def root():
@@ -209,7 +192,6 @@ async def create_room():
             room = {
                 "code": code,
                 "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(days=1),
                 "messages": []
             }
             
@@ -219,6 +201,14 @@ async def create_room():
             if attempt == max_attempts - 1:
                 raise HTTPException(status_code=500, detail="Failed to create room")
             continue
+
+@app.delete("/api/rooms/{room_code}")
+async def delete_room(room_code: str):
+    """Delete a specific room and its messages."""
+    result = await db.rooms.delete_one({"code": room_code})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return {"message": f"Room {room_code} successfully deleted"}
 
 @app.get("/api/rooms/{room_code}")
 async def get_room(room_code: str):
@@ -242,7 +232,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str):
                     "content": data["content"],
                     "sender": data["sender"],
                     "timestamp": datetime.utcnow().isoformat(),
-                    "image_url": data.get("image_url")  # Add support for image messages
+                    "image_url": data.get("image_url")
                 }
                 await db.rooms.update_one(
                     {"code": room_code},
