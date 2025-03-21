@@ -24,6 +24,7 @@
             --bg-hover: #f9f9f9;
             --bg-color: #fff;
             --error-color: #e74c3c;
+            --success-color: #2ecc71;
             --animation-duration: 0.5s;
             --border-radius: 8px;
         }
@@ -37,6 +38,8 @@
             position: relative;
             overflow-x: hidden;
             transition: background-color 0.3s ease, color 0.3s ease;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .progress {
@@ -61,7 +64,7 @@
         .container {
             max-width: 650px;
             margin: 0 auto;
-            padding: 40px 25px;
+            padding: 40px 25px 80px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -76,6 +79,7 @@
             font-size: 22px;
             letter-spacing: -0.5px;
             transition: all 0.3s ease;
+            z-index: 10;
         }
 
         .branding {
@@ -123,9 +127,10 @@
             transition: opacity 0.7s ease, transform 0.7s ease;
             will-change: opacity, transform;
             pointer-events: none;
-            height: 100vh;
+            min-height: calc(100vh - 80px);
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            padding-bottom: 60px; /* Add space at bottom for better mobile UX */
         }
 
         .slide.active {
@@ -557,9 +562,95 @@
             color: var(--primary-color);
         }
 
+        .file-input-container {
+            margin-bottom: 30px;
+        }
+
+        .file-input-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 20px;
+            border: 2px dashed var(--border-color);
+            border-radius: var(--border-radius);
+            background-color: var(--bg-hover);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .file-input-label:hover {
+            border-color: var(--primary-color);
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .file-input-label svg {
+            width: 40px;
+            height: 40px;
+            stroke: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .file-input-text {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-color);
+            margin-bottom: 5px;
+        }
+
+        .file-input-subtext {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
         .file-input {
-            padding: 12px;
-            background: var(--bg-hover);
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        .file-preview {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-radius: var(--border-radius);
+            background-color: var(--bg-hover);
+            margin-bottom: 10px;
+        }
+
+        .file-preview-icon {
+            margin-right: 10px;
+            color: var(--primary-color);
+        }
+
+        .file-preview-name {
+            flex: 1;
+            font-size: 14px;
+            color: var(--text-color);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-preview-remove {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 5px;
+            font-size: 16px;
+            transition: color 0.3s ease;
+        }
+
+        .file-preview-remove:hover {
+            color: var(--error-color);
         }
 
         .location-btn {
@@ -575,75 +666,118 @@
             height: 18px;
         }
 
-        /* Swipe Navigation */
-        .swipe-indicator {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
+        /* Navigation Controls */
+        .nav-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 0 20px;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .nav-arrow {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: rgba(0, 0, 0, 0.05);
+            background: var(--primary-color);
             display: flex;
             align-items: center;
             justify-content: center;
-            animation: pulse 2s infinite;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
             opacity: 0.7;
+            pointer-events: auto;
         }
 
-        .swipe-indicator svg {
+        .nav-arrow:hover {
+            opacity: 1;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-arrow svg {
             width: 20px;
             height: 20px;
-            stroke: var(--text-secondary);
+            stroke: white;
+        }
+
+        .nav-arrow.prev {
+            transform: rotate(90deg);
+        }
+
+        .nav-arrow.next {
+            transform: rotate(-90deg);
+        }
+
+        .nav-arrow.prev:hover {
+            transform: rotate(90deg) translateY(-3px);
+        }
+
+        .nav-arrow.next:hover {
+            transform: rotate(-90deg) translateY(-3px);
         }
 
         /* Scroll Navigation */
-        .scroll-indicator {
-            position: absolute;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
+        .scroll-nav {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            opacity: 0.7;
-            transition: opacity 0.3s ease;
-            animation: bounce 2s infinite;
+            gap: 10px;
+            z-index: 100;
         }
 
-        .scroll-indicator:hover {
-            opacity: 1;
+        .scroll-nav-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
 
-        .scroll-indicator svg {
-            width: 24px;
-            height: 24px;
-            stroke: var(--text-secondary);
+        .scroll-nav-dot.active {
+            background: var(--primary-color);
+            transform: scale(1.3);
         }
 
-        .scroll-indicator-text {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 5px;
+        /* Error Message */
+        .error-message {
+            background-color: rgba(231, 76, 60, 0.1);
+            border-left: 4px solid var(--error-color);
+            color: var(--error-color);
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
         }
 
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% {
-                transform: translateY(0) translateX(-50%);
-            }
-            40% {
-                transform: translateY(-10px) translateX(-50%);
-            }
-            60% {
-                transform: translateY(-5px) translateX(-50%);
-            }
+        .error-message.visible {
+            display: block;
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
         }
 
         /* Responsive improvements */
         @media (max-width: 768px) {
             .container {
-                padding: 30px 20px;
+                padding: 30px 20px 70px;
             }
             
             h1 {
@@ -667,6 +801,10 @@
                 width: 80px;
                 height: 80px;
                 margin-bottom: 25px;
+            }
+
+            .scroll-nav {
+                display: none; /* Hide on mobile */
             }
         }
 
@@ -713,6 +851,16 @@
             .branding {
                 font-size: 12px;
             }
+
+            .nav-controls {
+                bottom: 15px;
+                gap: 10px;
+            }
+
+            .nav-arrow {
+                width: 36px;
+                height: 36px;
+            }
         }
 
         /* Additional animations */
@@ -726,30 +874,8 @@
             animation: pulse 2s infinite;
         }
 
-        /* Scroll-based slide navigation */
-        .scroll-nav {
-            position: fixed;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 100;
-        }
-
-        .scroll-nav-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: rgba(0, 0, 0, 0.2);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .scroll-nav-dot.active {
-            background: var(--primary-color);
-            transform: scale(1.3);
+        .custom-html-content {
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -768,12 +894,24 @@
     
     <div class="container" id="form-container">
         <div class="logo" id="form-logo">FlyForms</div>
-        
         <!-- This will be populated dynamically -->
     </div>
     
     <div class="scroll-nav" id="scroll-nav">
         <!-- This will be populated dynamically -->
+    </div>
+
+    <div class="nav-controls" id="nav-controls">
+        <div class="nav-arrow prev" id="nav-prev">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+        </div>
+        <div class="nav-arrow next" id="nav-next">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </div>
     </div>
     
     <div class="branding">
@@ -781,28 +919,30 @@
     </div>
 
     <script>
-        // Assume API_URL is defined in config.js
+        // API URL for backend communication
         const API_URL = "https://chat-8ynk.onrender.com";
         
-        // Extract the form ID from the URL path
-        const path = window.location.pathname;
+        // Form state management
         let formSlug = null;
         let formState = null;
         let isLoading = true;
         let formFound = false;
         let touchStartY = 0;
         let touchEndY = 0;
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let isSwiping = false;
+        let lastSwipeTime = 0;
         
-        // Check if the URL follows the pattern /f/directid
+        // Extract the form slug from the URL path
+        const path = window.location.pathname;
         if (path.includes('/f/')) {
-            // Extract the ID after /f/
             const segments = path.split('/');
             const fIndex = segments.indexOf('f');
             if (fIndex !== -1 && fIndex < segments.length - 1) {
                 formSlug = segments[fIndex + 1];
             }
         } else {
-            // If URL doesn't have /f/ pattern, set formFound to false immediately
             formFound = false;
         }
         
@@ -810,18 +950,20 @@
             // Show loading state
             showLoading();
             
+            // Setup navigation arrow event listeners
+            document.getElementById('nav-prev').addEventListener('click', handlePrevClick);
+            document.getElementById('nav-next').addEventListener('click', handleNextClick);
+            
             // If formSlug was found, load the form, otherwise show error
             if (formSlug) {
-                // Load form with a slight delay to ensure loading state is visible
                 setTimeout(() => {
                     loadForm(formSlug);
-                }, 1500); // Longer delay to show the loading animation
+                }, 1000);
             } else {
-                // Render page not found after loading animation
                 setTimeout(() => {
                     renderErrorState();
                     hideLoading();
-                }, 1500);
+                }, 1000);
             }
             
             // Add ripple effect to buttons
@@ -831,10 +973,36 @@
                 }
             });
             
-            // Add touch event listeners for swipe navigation
-            document.addEventListener('touchstart', handleTouchStart, false);
-            document.addEventListener('touchend', handleTouchEnd, false);
+            // Add improved touch event listeners
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchmove', handleTouchMove, { passive: true });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+            // Add keyboard navigation
+            document.addEventListener('keydown', function(e) {
+                if (!formState) return;
+                
+                if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    navigateToNextSlide(formState.currentSlide);
+                } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const currentIndex = getQuestionIndex(formState.currentSlide);
+                    navigateToPrevSlide(formState.currentSlide, currentIndex);
+                }
+            });
         });
+        
+        function handlePrevClick() {
+            if (!formState) return;
+            const currentIndex = getQuestionIndex(formState.currentSlide);
+            navigateToPrevSlide(formState.currentSlide, currentIndex);
+        }
+        
+        function handleNextClick() {
+            if (!formState) return;
+            navigateToNextSlide(formState.currentSlide);
+        }
         
         function createRipple(event) {
             const button = event.currentTarget;
@@ -952,6 +1120,30 @@
                     dot.classList.remove('active');
                 }
             });
+            
+            // Update the nav controls visibility
+            updateNavControls();
+        }
+        
+        function updateNavControls() {
+            const prevBtn = document.getElementById('nav-prev');
+            const nextBtn = document.getElementById('nav-next');
+            
+            if (formState.currentSlide === 'start') {
+                prevBtn.style.opacity = '0.3';
+                prevBtn.style.pointerEvents = 'none';
+            } else {
+                prevBtn.style.opacity = '0.7';
+                prevBtn.style.pointerEvents = 'auto';
+            }
+            
+            if (formState.currentSlide === 'end') {
+                nextBtn.style.opacity = '0.3';
+                nextBtn.style.pointerEvents = 'none';
+            } else {
+                nextBtn.style.opacity = '0.7';
+                nextBtn.style.pointerEvents = 'auto';
+            }
         }
         
         function renderErrorState() {
@@ -999,8 +1191,9 @@
             
             container.appendChild(errorSlide);
             
-            // Hide scroll navigation
+            // Hide scroll navigation and nav controls
             document.getElementById('scroll-nav').style.display = 'none';
+            document.getElementById('nav-controls').style.display = 'none';
             
             // Show the error slide with animation
             setTimeout(() => {
@@ -1038,20 +1231,9 @@
             startButton.textContent = 'Get Started';
             startButton.onclick = () => navigateToNextSlide('start');
             
-            // Add scroll indicator to start screen
-            const scrollIndicator = document.createElement('div');
-            scrollIndicator.className = 'scroll-indicator';
-            scrollIndicator.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14M5 12l7 7 7-7"/>
-                </svg>
-                <div class="scroll-indicator-text">Scroll or swipe to continue</div>
-            `;
-            
             startScreen.appendChild(startTitle);
             startScreen.appendChild(startDescription);
             startScreen.appendChild(startButton);
-            startScreen.appendChild(scrollIndicator);
             
             container.appendChild(startScreen);
             
@@ -1083,6 +1265,14 @@
             
             const endDescription = document.createElement('p');
             endDescription.textContent = formData.end_screen.description || '';
+            
+            // Add custom HTML if present
+            if (formData.end_screen.custom_html) {
+                const customHtmlContainer = document.createElement('div');
+                customHtmlContainer.className = 'custom-html-content';
+                customHtmlContainer.innerHTML = formData.end_screen.custom_html;
+                endContent.appendChild(customHtmlContainer);
+            }
             
             const createOwnText = document.createElement('a');
             createOwnText.href = 'index.html';
@@ -1119,12 +1309,22 @@
                 customStyle.textContent = formData.theme.custom_css;
                 document.head.appendChild(customStyle);
             }
+            
+            // Update navigation controls
+            updateNavControls();
         }
         
         function createQuestionSlide(question, index) {
             const slide = document.createElement('div');
             slide.className = 'slide';
             slide.id = `slide-${question.id}`;
+            
+            // Error message container for validation
+            const errorMessage = document.createElement('div');
+            errorMessage.className = 'error-message';
+            errorMessage.id = `error-${question.id}`;
+            errorMessage.textContent = 'This question requires an answer.';
+            slide.appendChild(errorMessage);
             
             const title = document.createElement('h1');
             title.textContent = question.title;
@@ -1181,6 +1381,9 @@
                             
                             // Select this option
                             this.classList.add('selected');
+                            
+                            // Hide error message if visible
+                            hideErrorMessage(question.id);
                         };
                         
                         const optionTitle = document.createElement('h3');
@@ -1211,6 +1414,12 @@
                             this.classList.toggle('selected');
                             const checkbox = this.querySelector('input[type="checkbox"]');
                             checkbox.checked = !checkbox.checked;
+                            
+                            // Hide error message if at least one checkbox is selected
+                            const selectedCheckboxes = checkboxes.querySelectorAll('.checkbox-option.selected');
+                            if (selectedCheckboxes.length > 0) {
+                                hideErrorMessage(question.id);
+                            }
                         };
                         
                         const checkbox = document.createElement('input');
@@ -1220,6 +1429,12 @@
                         checkbox.onclick = (e) => {
                             e.stopPropagation();
                             checkboxOption.classList.toggle('selected');
+                            
+                            // Hide error message if at least one checkbox is selected
+                            const selectedCheckboxes = checkboxes.querySelectorAll('.checkbox-option.selected');
+                            if (selectedCheckboxes.length > 0) {
+                                hideErrorMessage(question.id);
+                            }
                         };
                         
                         const label = document.createElement('label');
@@ -1253,6 +1468,10 @@
                         select.appendChild(optionElement);
                     });
                     
+                    select.addEventListener('change', () => {
+                        hideErrorMessage(question.id);
+                    });
+                    
                     slide.appendChild(select);
                     break;
                     
@@ -1273,6 +1492,9 @@
                             
                             // Select this rating
                             this.classList.add('selected');
+                            
+                            // Hide error message
+                            hideErrorMessage(question.id);
                         };
                         
                         ratingGroup.appendChild(ratingBtn);
@@ -1301,6 +1523,7 @@
                     
                     slider.oninput = function() {
                         scaleValue.textContent = this.value;
+                        hideErrorMessage(question.id);
                     };
                     
                     scaleContainer.appendChild(slider);
@@ -1313,6 +1536,9 @@
                     dateInput.type = 'date';
                     dateInput.className = 'input';
                     dateInput.id = `input-${question.id}`;
+                    dateInput.addEventListener('change', () => {
+                        hideErrorMessage(question.id);
+                    });
                     slide.appendChild(dateInput);
                     break;
                     
@@ -1321,13 +1547,35 @@
                     timeInput.type = 'time';
                     timeInput.className = 'input';
                     timeInput.id = `input-${question.id}`;
+                    timeInput.addEventListener('change', () => {
+                        hideErrorMessage(question.id);
+                    });
                     slide.appendChild(timeInput);
                     break;
                     
                 case 'file':
+                    // Create container for file upload UI
+                    const fileContainer = document.createElement('div');
+                    fileContainer.className = 'file-input-container';
+                    
+                    // Create label for file input
+                    const fileLabel = document.createElement('label');
+                    fileLabel.className = 'file-input-label';
+                    fileLabel.htmlFor = `input-${question.id}`;
+                    fileLabel.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <div class="file-input-text">Choose a file or drag & drop</div>
+                        <div class="file-input-subtext">${question.accept ? 'Accepts: ' + question.accept : 'Max size: 5MB'}</div>
+                    `;
+                    
+                    // Create actual file input (hidden)
                     const fileInput = document.createElement('input');
                     fileInput.type = 'file';
-                    fileInput.className = 'input file-input';
+                    fileInput.className = 'file-input';
                     fileInput.id = `input-${question.id}`;
                     
                     if (question.accept) {
@@ -1338,7 +1586,44 @@
                         fileInput.multiple = true;
                     }
                     
-                    slide.appendChild(fileInput);
+                    // Create preview container
+                    const previewContainer = document.createElement('div');
+                    previewContainer.id = `preview-${question.id}`;
+                    previewContainer.className = 'file-preview-container';
+                    
+                    // Handle file selection
+                    fileInput.addEventListener('change', (e) => {
+                        handleFileSelection(e, question.id, previewContainer);
+                        hideErrorMessage(question.id);
+                    });
+                    
+                    // Handle drag & drop
+                    fileLabel.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        fileLabel.style.borderColor = 'var(--primary-color)';
+                        fileLabel.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+                    });
+                    
+                    fileLabel.addEventListener('dragleave', () => {
+                        fileLabel.style.borderColor = 'var(--border-color)';
+                        fileLabel.style.backgroundColor = 'var(--bg-hover)';
+                    });
+                    
+                    fileLabel.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        fileLabel.style.borderColor = 'var(--border-color)';
+                        fileLabel.style.backgroundColor = 'var(--bg-hover)';
+                        fileInput.files = e.dataTransfer.files;
+                        
+                        // Trigger change event manually
+                        const event = new Event('change', { bubbles: true });
+                        fileInput.dispatchEvent(event);
+                    });
+                    
+                    fileContainer.appendChild(fileLabel);
+                    fileContainer.appendChild(fileInput);
+                    fileContainer.appendChild(previewContainer);
+                    slide.appendChild(fileContainer);
                     break;
                     
                 case 'location':
@@ -1347,6 +1632,9 @@
                     locationInput.className = 'input';
                     locationInput.id = `input-${question.id}`;
                     locationInput.placeholder = 'Enter your location';
+                    locationInput.addEventListener('input', () => {
+                        hideErrorMessage(question.id);
+                    });
                     
                     const locationButton = document.createElement('button');
                     locationButton.className = 'btn btn-back location-btn';
@@ -1361,16 +1649,17 @@
                                 const latitude = position.coords.latitude;
                                 const longitude = position.coords.longitude;
                                 locationInput.value = `${latitude}, ${longitude}`;
+                                hideErrorMessage(question.id);
                                 
                                 locationButton.disabled = false;
                                 locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Use Current Location';
                             }, () => {
-                                alert('Unable to retrieve your location');
+                                showErrorMessage(question.id, 'Unable to retrieve your location');
                                 locationButton.disabled = false;
                                 locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Use Current Location';
                             });
                         } else {
-                            alert('Geolocation is not supported by your browser');
+                            showErrorMessage(question.id, 'Geolocation is not supported by your browser');
                         }
                     };
                     
@@ -1402,20 +1691,120 @@
             buttonContainer.appendChild(backButton);
             slide.appendChild(buttonContainer);
             
-            // Add scroll/swipe indicator if not the last question
-            if (index < formState?.formData?.questions.length - 1) {
-                const swipeIndicator = document.createElement('div');
-                swipeIndicator.className = 'scroll-indicator';
-                swipeIndicator.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 5v14M5 12l7 7 7-7"/>
-                    </svg>
-                    <div class="scroll-indicator-text">Scroll or swipe to continue</div>
-                `;
-                slide.appendChild(swipeIndicator);
-            }
-            
             return slide;
+        }
+        
+        function handleFileSelection(event, questionId, previewContainer) {
+            const files = event.target.files;
+            
+            // Clear preview container
+            previewContainer.innerHTML = '';
+            
+            if (files.length === 0) return;
+            
+            // Process and display each file
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                // Check file size (5MB limit)
+                if (file.size > 5 * 1024 * 1024) {
+                    showErrorMessage(questionId, `File ${file.name} exceeds the 5MB size limit.`);
+                    event.target.value = ''; // Clear the file input
+                    return;
+                }
+                
+                // Create preview element
+                const previewElement = document.createElement('div');
+                previewElement.className = 'file-preview';
+                
+                // Icon based on file type
+                let icon = '';
+                if (file.type.startsWith('image/')) {
+                    icon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
+                } else if (file.type.startsWith('video/')) {
+                    icon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>';
+                } else if (file.type.startsWith('audio/')) {
+                    icon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>';
+                } else {
+                    icon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+                }
+                
+                // Create icon element
+                const iconElement = document.createElement('div');
+                iconElement.className = 'file-preview-icon';
+                iconElement.innerHTML = icon;
+                
+                // Create file name element
+                const nameElement = document.createElement('div');
+                nameElement.className = 'file-preview-name';
+                nameElement.textContent = file.name;
+                
+                // Create remove button
+                const removeButton = document.createElement('button');
+                removeButton.className = 'file-preview-remove';
+                removeButton.innerHTML = '&times;';
+                removeButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    previewElement.remove();
+                    
+                    // Clear the file input (recreate it)
+                    const fileInput = document.getElementById(`input-${questionId}`);
+                    const newFileInput = document.createElement('input');
+                    newFileInput.type = 'file';
+                    newFileInput.className = 'file-input';
+                    newFileInput.id = `input-${questionId}`;
+                    if (fileInput.accept) newFileInput.accept = fileInput.accept;
+                    if (fileInput.multiple) newFileInput.multiple = fileInput.multiple;
+                    newFileInput.addEventListener('change', (e) => handleFileSelection(e, questionId, previewContainer));
+                    fileInput.parentNode.replaceChild(newFileInput, fileInput);
+                });
+                
+                // Add all elements to preview
+                previewElement.appendChild(iconElement);
+                previewElement.appendChild(nameElement);
+                previewElement.appendChild(removeButton);
+                
+                // Add preview to container
+                previewContainer.appendChild(previewElement);
+                
+                // Read and encode file for submission
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // Store base64 data in the form state when we submit
+                    const fileData = {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: e.target.result
+                    };
+                    
+                    // Store this data in a hidden field to be collected later
+                    const dataField = document.createElement('input');
+                    dataField.type = 'hidden';
+                    dataField.id = `file-data-${questionId}`;
+                    dataField.value = JSON.stringify(fileData);
+                    previewElement.appendChild(dataField);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function showErrorMessage(questionId, message) {
+            const errorElement = document.getElementById(`error-${questionId}`);
+            if (errorElement) {
+                errorElement.textContent = message || 'This question requires an answer.';
+                errorElement.classList.add('visible');
+                
+                // Scroll to error message
+                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+        
+        function hideErrorMessage(questionId) {
+            const errorElement = document.getElementById(`error-${questionId}`);
+            if (errorElement) {
+                errorElement.classList.remove('visible');
+            }
         }
         
         function navigateToSlide(slideId) {
@@ -1435,13 +1824,8 @@
                 // Validate required questions if we're moving forward
                 if (question.required && getQuestionIndex(slideId) > getQuestionIndex(currentId)) {
                     if (!validateQuestion(currentId)) {
-                        // Show validation error with a shake animation
-                        currentSlide.style.animation = 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both';
-                        setTimeout(() => {
-                            currentSlide.style.animation = '';
-                        }, 500);
-                        
-                        alert('Please answer this question before continuing.');
+                        // Show validation error message
+                        showErrorMessage(currentId);
                         return;
                     }
                 }
@@ -1450,7 +1834,7 @@
                 collectAnswer(currentId);
             }
             
-            // Add exit animation to current slide - make this smoother
+            // Add exit animation to current slide
             currentSlide.style.opacity = '0';
             currentSlide.style.transform = 'translateY(-30px)';
             
@@ -1489,12 +1873,15 @@
                 updateScrollNav();
                 
                 // Auto-focus first input in the new slide if present
-                const firstInput = nextSlide.querySelector('input, textarea, select');
+                const firstInput = nextSlide.querySelector('input:not([type="hidden"]), textarea, select');
                 if (firstInput) {
                     setTimeout(() => {
                         firstInput.focus();
                     }, 400);
                 }
+                
+                // Scroll to top of slide
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             }, 400);
         }
         
@@ -1521,6 +1908,7 @@
             } else {
                 // Validate required questions
                 if (!validateQuestion(currentId)) {
+                    showErrorMessage(currentId);
                     return;
                 }
                 
@@ -1541,41 +1929,48 @@
                     
                     // Submit the form with a slight delay for animation
                     setTimeout(() => {
-                        submitForm().then(() => {
-                            // Remove active class
-                            currentSlide.classList.remove('active');
-                            
-                            // Set next slide to end screen
-                            nextId = 'end';
-                            
-                            // Get the end slide
-                            const nextSlide = document.getElementById(`slide-${nextId}`);
-                            
-                            // Apply initial position before showing
-                            nextSlide.style.opacity = '0';
-                            nextSlide.style.transform = 'translateY(30px)';
-                            
-                            // Add active class to show the slide
-                            nextSlide.classList.add('active');
-                            
-                            // Force reflow
-                            void nextSlide.offsetWidth;
-                            
-                            // Apply transition to visible state
-                            nextSlide.style.opacity = '1';
-                            nextSlide.style.transform = 'translateY(0)';
-                            
-                            // Update current slide in state
-                            formState.currentSlide = nextId;
-                            
-                            // Update progress bar
-                            updateProgress();
-                            
-                            // Update scroll navigation
-                            updateScrollNav();
-                            
-                            // Hide loading
-                            hideLoading();
+                        submitForm().then(result => {
+                            if (result) {
+                                // Remove active class
+                                currentSlide.classList.remove('active');
+                                
+                                // Set next slide to end screen
+                                nextId = 'end';
+                                
+                                // Get the end slide
+                                const nextSlide = document.getElementById(`slide-${nextId}`);
+                                
+                                // Apply initial position before showing
+                                nextSlide.style.opacity = '0';
+                                nextSlide.style.transform = 'translateY(30px)';
+                                
+                                // Add active class to show the slide
+                                nextSlide.classList.add('active');
+                                
+                                // Force reflow
+                                void nextSlide.offsetWidth;
+                                
+                                // Apply transition to visible state
+                                nextSlide.style.opacity = '1';
+                                nextSlide.style.transform = 'translateY(0)';
+                                
+                                // Update current slide in state
+                                formState.currentSlide = nextId;
+                                
+                                // Update progress bar
+                                updateProgress();
+                                
+                                // Update scroll navigation
+                                updateScrollNav();
+                                
+                                // Hide loading
+                                hideLoading();
+                            } else {
+                                // Show the current slide again if submission failed
+                                currentSlide.style.opacity = '1';
+                                currentSlide.style.transform = 'translateY(0)';
+                                hideLoading();
+                            }
                         });
                     }, 400);
                     
@@ -1660,26 +2055,11 @@
                     break;
                     
                 case 'file':
-                    const fileInput = document.getElementById(`input-${question.id}`);
-                    if (fileInput.files.length > 0) {
-                        answer = 'Files selected'; // We can't actually upload files in this demo
+                    const previewContainer = document.getElementById(`preview-${question.id}`);
+                    if (previewContainer && previewContainer.children.length > 0) {
+                        answer = true;
                     }
                     break;
-            }
-            
-            // Add shake animation if it doesn't exist
-            if (!document.querySelector('style#shake-animation')) {
-                const styleSheet = document.createElement('style');
-                styleSheet.id = 'shake-animation';
-                styleSheet.textContent = `
-                    @keyframes shake {
-                        10%, 90% { transform: translate3d(-1px, 0, 0); }
-                        20%, 80% { transform: translate3d(2px, 0, 0); }
-                        30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-                        40%, 60% { transform: translate3d(4px, 0, 0); }
-                    }
-                `;
-                document.head.appendChild(styleSheet);
             }
             
             return !!answer;
@@ -1733,8 +2113,15 @@
                     break;
                     
                 case 'file':
-                    // In a real app, we would handle file uploads here
-                    answer = 'File upload placeholder';
+                    // Get file data from hidden field
+                    const fileDataField = document.getElementById(`file-data-${question.id}`);
+                    if (fileDataField) {
+                        try {
+                            answer = JSON.parse(fileDataField.value);
+                        } catch (e) {
+                            console.error('Error parsing file data:', e);
+                        }
+                    }
                     break;
             }
             
@@ -1760,15 +2147,27 @@
                     throw new Error(result.detail || 'Failed to submit form');
                 }
                 
-                // Check if there's dynamic content for the end screen
-                if (result.end_screen && result.end_screen.dynamic_content) {
-                    // Update end screen with dynamic content
+                // Update end screen with dynamic content
+                if (result.end_screen) {
                     const endScreen = document.getElementById('slide-end');
                     const endTitle = endScreen.querySelector('h1');
                     const endDescription = endScreen.querySelector('p');
                     
                     endTitle.textContent = result.end_screen.title || formState.formData.end_screen.title;
                     endDescription.textContent = result.end_screen.description || formState.formData.end_screen.description;
+                    
+                    // Handle custom HTML if present
+                    if (result.end_screen.custom_html) {
+                        let customHtmlContainer = endScreen.querySelector('.custom-html-content');
+                        
+                        if (!customHtmlContainer) {
+                            customHtmlContainer = document.createElement('div');
+                            customHtmlContainer.className = 'custom-html-content';
+                            endScreen.querySelector('.success').appendChild(customHtmlContainer);
+                        }
+                        
+                        customHtmlContainer.innerHTML = result.end_screen.custom_html;
+                    }
                 }
                 
                 console.log('Form submitted successfully:', result);
@@ -1833,6 +2232,16 @@
                 checkbox.checked = false;
             });
             
+            // Reset file uploads
+            document.querySelectorAll('.file-preview-container').forEach(container => {
+                container.innerHTML = '';
+            });
+            
+            // Hide all error messages
+            document.querySelectorAll('.error-message').forEach(error => {
+                error.classList.remove('visible');
+            });
+            
             // Update progress bar
             updateProgress();
             
@@ -1840,17 +2249,40 @@
             updateScrollNav();
         }
         
-        // Touch event handlers for swipe navigation
+        // Improved touch event handlers for better swipe detection
         function handleTouchStart(event) {
             touchStartY = event.touches[0].clientY;
+            touchStartX = event.touches[0].pageX;
+            isSwiping = false;
+        }
+        
+        function handleTouchMove(event) {
+            // Skip if already swiping or no touch start recorded
+            if (isSwiping || !touchStartY) return;
+            
+            const touchY = event.touches[0].clientY;
+            const touchX = event.touches[0].pageX;
+            
+            // Calculate distance moved
+            const deltaY = touchStartY - touchY;
+            const deltaX = touchStartX - touchX;
+            
+            // Only consider vertical swipes (ignore horizontal motion)
+            if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 30) {
+                isSwiping = true;
+            }
         }
         
         function handleTouchEnd(event) {
+            // Skip if not swiping or no touch start recorded
+            if (!isSwiping || !touchStartY) return;
+            
             touchEndY = event.changedTouches[0].clientY;
-            handleSwipe();
-        }
-        
-        function handleSwipe() {
+            
+            // Prevent rapid swipes
+            const now = new Date().getTime();
+            if (now - lastSwipeTime < 500) return;
+            
             const swipeDistance = touchStartY - touchEndY;
             const minSwipeDistance = 50; // Minimum distance required for a swipe
             
@@ -1864,6 +2296,12 @@
                 const currentIndex = getQuestionIndex(formState.currentSlide);
                 navigateToPrevSlide(formState.currentSlide, currentIndex);
             }
+            
+            // Record last swipe time
+            lastSwipeTime = now;
+            
+            // Reset swipe state
+            isSwiping = false;
         }
     </script>
 </body>
