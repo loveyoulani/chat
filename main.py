@@ -66,8 +66,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # MongoDB setup
 MONGODB_URL = os.environ.get("MONGODB_URL", "mongodb://localhost:27017")
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URL)
-db = client.formbuilder
-fs = gridfs.GridFS(client.formbuilder)
+db = client.get_database("formbuilder")  # Use get_database to properly initialize the database
+fs = gridfs.GridFS(db)  # Now pass the properly initialized database
 
 # Database collections
 users_collection = db.users
@@ -1250,4 +1250,3 @@ async def create_default_templates():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
