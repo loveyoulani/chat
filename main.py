@@ -108,19 +108,26 @@ class PyObjectId(ObjectId):
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
-
+    
+    # Update for Pydantic v2
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_core_schema__(cls, _source_type, _handler):
+        from pydantic_core import core_schema
+        return core_schema.with_info_plain_validator_function(
+            cls.validate,
+            serialization=core_schema.to_string_serializer(),
+            type=cls
+        )
 
 class UserBase(BaseModel):
     email: EmailStr
     username: str
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class UserCreate(UserBase):
     password: str
@@ -141,39 +148,43 @@ class Option(BaseModel):
     label: str
     description: Optional[str] = None
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
     
 class Condition(BaseModel):
     question_id: str
     operator: str  # equals, not_equals, contains, not_contains, etc.
     value: Any
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Action(BaseModel):
     type: str  # show, hide, jump_to, end_form, etc.
     target_id: Optional[str] = None
     value: Optional[Any] = None
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Logic(BaseModel):
     condition: Condition
     action: Action
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class FileMetadata(BaseModel):
     filename: str
@@ -181,10 +192,11 @@ class FileMetadata(BaseModel):
     size: int
     file_id: str  # GridFS ID
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Question(BaseModel):
     id: str
@@ -200,10 +212,11 @@ class Question(BaseModel):
     accept: Optional[str] = None  # For file uploads, e.g., "image/*"
     multiple: Optional[bool] = False  # For file uploads
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
     
 class Screen(BaseModel):
     id: str
@@ -213,10 +226,11 @@ class Screen(BaseModel):
     custom_css: Optional[str] = None
     custom_html: Optional[str] = None
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class EndScreen(BaseModel):
     id: str
@@ -227,10 +241,11 @@ class EndScreen(BaseModel):
     custom_html: Optional[str] = None
     dynamic_content: Optional[Dict[str, Any]] = None  # Enhanced to support nested conditions
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class FormCreate(BaseModel):
     title: str
@@ -243,10 +258,11 @@ class FormCreate(BaseModel):
     custom_slug: Optional[str] = None
     theme: Optional[Dict[str, Any]] = None
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
     
 class Form(FormCreate):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -263,10 +279,11 @@ class FormResponseCreate(BaseModel):
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class FormResponse(FormResponseCreate):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -280,10 +297,11 @@ class Template(BaseModel):
     form_data: Dict[str, Any]
     category: str
     
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
@@ -391,7 +409,7 @@ async def register_user(request: Request, user: UserCreate):
     
     # Create new user with hashed password
     hashed_password = get_password_hash(user.password)
-    user_dict = user.dict(by_alias=True)
+    user_dict = user.model_dump(by_alias=True)  # Updated for Pydantic v2
     user_dict.pop("password")
     user_dict["hashed_password"] = hashed_password
     user_dict["created_at"] = datetime.now()
@@ -440,7 +458,7 @@ async def create_form(
         )
     
     # Create new form
-    form_dict = form_data.dict(by_alias=True)
+    form_dict = form_data.model_dump(by_alias=True)  # Updated for Pydantic v2
     form_dict["creator_id"] = current_user.id
     form_dict["created_at"] = datetime.now()
     form_dict["updated_at"] = datetime.now()
@@ -699,7 +717,7 @@ async def update_form(
             )
     
     # Update form
-    form_dict = form_data.dict(by_alias=True)
+    form_dict = form_data.model_dump(by_alias=True)  # Updated for Pydantic v2
     form_dict["updated_at"] = datetime.now()
     
     # Keep the original slug if no custom slug provided
@@ -1155,7 +1173,7 @@ async def create_template(
     current_user: User = Depends(get_current_user)
 ):
     # Create a new template
-    template_dict = template_data.dict(by_alias=True, exclude={"id"})
+    template_dict = template_data.model_dump(by_alias=True, exclude={"id"})  # Updated for Pydantic v2
     
     result = templates_collection.insert_one(template_dict)
     created_template = templates_collection.find_one({"_id": result.inserted_id})
