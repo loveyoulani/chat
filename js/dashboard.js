@@ -1,4 +1,10 @@
 document.addEventListener("DOMContentLoaded", async function() {
+    // Initialize sidebar functionality
+    initSidebar();
+    
+    // Initialize user dropdown
+    initUserDropdown();
+    
     const token = localStorage.getItem("token");
     
     if (!token) {
@@ -27,6 +33,83 @@ document.addEventListener("DOMContentLoaded", async function() {
     }
 });
 
+// Initialize sidebar functionality
+function initSidebar() {
+    // Dropdown menu functionality
+    const dropdownItems = document.querySelectorAll('.sidebar-nav ul li.has-dropdown > a');
+    
+    dropdownItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const parent = this.parentElement;
+            parent.classList.toggle('active');
+        });
+    });
+    
+    // Mobile sidebar toggle
+    const mobileToggle = document.querySelector('.mobile-sidebar-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    
+    if (mobileToggle) {
+        mobileToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+            document.body.classList.toggle('sidebar-open');
+        });
+    }
+    
+    // Close sidebar when clicking overlay
+    if (overlay) {
+        overlay.addEventListener('click', function() {
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+            document.body.classList.remove('sidebar-open');
+        });
+    }
+    
+    // Existing sidebar toggle button
+    const sidebarToggle = document.querySelector('.sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        });
+    }
+}
+
+// Initialize user dropdown
+function initUserDropdown() {
+    const userDropdownToggle = document.querySelector('.user-dropdown-toggle');
+    const userDropdownMenu = document.querySelector('.user-dropdown-menu');
+    
+    if (userDropdownToggle && userDropdownMenu) {
+        userDropdownToggle.addEventListener('click', function() {
+            userDropdownMenu.classList.toggle('active');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!userDropdownToggle.contains(event.target) && !userDropdownMenu.contains(event.target)) {
+                userDropdownMenu.classList.remove('active');
+            }
+        });
+    }
+    
+    // Logout functionality
+    const logoutBtns = document.querySelectorAll('#logout-btn, #dropdown-logout');
+    logoutBtns.forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'login.html';
+            });
+        }
+    });
+}
+
 async function fetchForms(token) {
     const response = await fetch(`${API_URL}/forms`, {
         headers: {
@@ -42,8 +125,7 @@ async function fetchForms(token) {
 }
 
 async function fetchResponses(token) {
-    // This is a simplified approach - in a real app, we might need pagination
-    // and would fetch responses for each form separately
+
     let allResponses = [];
     
     const forms = await fetchForms(token);

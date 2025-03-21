@@ -190,10 +190,22 @@ function setupEventListeners() {
         addDynamicRuleBtn.addEventListener("click", openDynamicRuleModal);
     }
     
+    // Add logic rule button
+    const addLogicRuleBtn = document.getElementById("add-logic-rule");
+    if (addLogicRuleBtn) {
+        addLogicRuleBtn.addEventListener("click", addLogicRule);
+    }
+    
     // Dynamic rule modal save button
     const saveDynamicRuleBtn = document.getElementById("save-dynamic-rule");
     if (saveDynamicRuleBtn) {
         saveDynamicRuleBtn.addEventListener("click", saveDynamicRule);
+    }
+    
+    // Logic modal save button
+    const saveLogicBtn = document.getElementById("save-logic");
+    if (saveLogicBtn) {
+        saveLogicBtn.addEventListener("click", saveLogic);
     }
     
     // Question edit modal save button
@@ -203,7 +215,7 @@ function setupEventListeners() {
     }
     
     // Cancel buttons for modals
-    document.querySelectorAll(".modal-close, #cancel-question-edit, #cancel-dynamic-rule, #close-preview").forEach(btn => {
+    document.querySelectorAll(".modal-close, #cancel-question-edit, #cancel-dynamic-rule, #close-preview, #cancel-logic").forEach(btn => {
         btn.addEventListener("click", function() {
             closeAllModals();
         });
@@ -412,6 +424,7 @@ function renderQuestion(question, index) {
     
     questionElement.innerHTML = questionHtml;
     questionElement.querySelector(".question-item").dataset.index = index;
+    questionElement.querySelector(".question-item").dataset.id = question.id;
     
     // Set required toggle state
     const requiredCheckbox = questionElement.querySelector(".required-checkbox");
@@ -638,7 +651,7 @@ function getQuestionPreviewContent(question) {
             
             optionItem.innerHTML = `
                 <input type="text" class="option-label" value="${option.label}" placeholder="Option label">
-                <button class="btn-small btn-outline btn-delete-option" data-index="${index}">
+                <button type="button" class="btn-small btn-outline btn-delete-option" data-index="${index}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             `;
@@ -650,11 +663,14 @@ function getQuestionPreviewContent(question) {
         
         // Add "Add Option" button
         const addOptionBtn = document.createElement("button");
+        addOptionBtn.type = "button";
         addOptionBtn.className = "btn btn-outline";
         addOptionBtn.innerHTML = `
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Add Option
         `;
+        
+        // Add event listener for adding options
         addOptionBtn.addEventListener("click", function() {
             const newOption = { value: `option${Date.now()}`, label: "New Option" };
             question.options.push(newOption);
@@ -665,19 +681,22 @@ function getQuestionPreviewContent(question) {
         
         optionsWrapper.appendChild(addOptionBtn);
         
-        // Add event listeners for option deletion
-        optionsWrapper.addEventListener("click", function(e) {
-            if (e.target.closest(".btn-delete-option")) {
-                const index = e.target.closest(".btn-delete-option").dataset.index;
-                question.options.splice(index, 1);
-                
-                // Re-render options
-                renderChoiceOptions(question, container);
+        // Add event delegation for option deletion
+        optionsList.addEventListener("click", function(e) {
+            const deleteButton = e.target.closest('.btn-delete-option');
+            if (deleteButton) {
+                e.stopPropagation();
+                const index = parseInt(deleteButton.dataset.index);
+                if (!isNaN(index) && index >= 0 && index < question.options.length) {
+                    question.options.splice(index, 1);
+                    // Re-render options
+                    renderChoiceOptions(question, container);
+                }
             }
         });
         
-        // Add event listeners for option label changes
-        optionsWrapper.addEventListener("input", function(e) {
+        // Add event delegation for option label changes
+        optionsList.addEventListener("input", function(e) {
             if (e.target.classList.contains("option-label")) {
                 const optionItem = e.target.closest(".option-item");
                 const index = Array.from(optionItem.parentNode.children).indexOf(optionItem);
@@ -986,12 +1005,193 @@ function getQuestionPreviewContent(question) {
                 </div>
                 <div class="rule-content">
                     <p>If answer to "<strong>${questionTitle}</strong>" ${rule.condition.operator} "${rule.condition.value}"</p>
-                    <p>Then ${rule.action.type} to <strong>${targetTitle}</strong></p>
+                    <p>Then ${rule.action.type.replace('_', ' ')} to <strong>${targetTitle}</strong></p>
                 </div>
             `;
             
             rulesContainer.appendChild(ruleElement);
         });
+        
+        // Add event listeners for rule actions
+        rulesContainer.addEventListener("click", function(e) {
+            const editButton = e.target.closest(".btn-edit-rule");
+            if (editButton) {
+                const index = parseInt(editButton.dataset.index);
+                editLogicRule(index);
+            }
+            
+            const deleteButton = e.target.closest(".btn-delete-rule");
+            if (deleteButton) {
+                const index = parseInt(deleteButton.dataset.index);
+                deleteLogicRule(index);
+            }
+        });
+    }
+    
+    function addLogicRule() {
+        const question = window.formBuilderState.editingQuestion;
+        if (!question) return;
+        
+        // Initialize logic array if it doesn't exist
+        if (!question.logic) {
+            question.logic = [];
+        }
+        
+        // Create a new rule template
+        const newRule = {
+            condition: {
+                question_id: "",
+                operator: "equals",
+                value: ""
+            },
+            action: {
+                type: "jump_to",
+                target_id: ""
+            }
+        };
+        
+        // Add rule to array
+        question.logic.push(newRule);
+        
+        // Re-render rules
+        renderLogicRules(question);
+        
+        // Scroll to bottom of container
+        const rulesContainer = document.getElementById("logic-rules-container");
+        if (rulesContainer) {
+            rulesContainer.scrollTop = rulesContainer.scrollHeight;
+        }
+        
+        // Edit the new rule
+        editLogicRule(question.logic.length - 1);
+    }
+    
+    function editLogicRule(index) {
+        const question = window.formBuilderState.editingQuestion;
+        if (!question || !question.logic || !question.logic[index]) return;
+        
+        const rule = question.logic[index];
+        
+        // Create a rule editing form
+        const ruleForm = document.createElement("div");
+        ruleForm.className = "logic-rule-form";
+        ruleForm.innerHTML = `
+            <div class="form-group">
+                <label>When question</label>
+                <select id="rule-condition-question">
+                    <option value="">Select a question</option>
+                    ${window.formBuilderState.form.questions
+                        .filter(q => q.id !== question.id) // Exclude current question
+                        .map(q => `<option value="${q.id}" ${rule.condition.question_id === q.id ? 'selected' : ''}>${q.title}</option>`)
+                        .join('')}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Condition</label>
+                <select id="rule-condition-operator">
+                    <option value="equals" ${rule.condition.operator === 'equals' ? 'selected' : ''}>Equals</option>
+                    <option value="not_equals" ${rule.condition.operator === 'not_equals' ? 'selected' : ''}>Does not equal</option>
+                    <option value="contains" ${rule.condition.operator === 'contains' ? 'selected' : ''}>Contains</option>
+                    <option value="not_contains" ${rule.condition.operator === 'not_contains' ? 'selected' : ''}>Does not contain</option>
+                    <option value="greater_than" ${rule.condition.operator === 'greater_than' ? 'selected' : ''}>Greater than</option>
+                    <option value="less_than" ${rule.condition.operator === 'less_than' ? 'selected' : ''}>Less than</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Value</label>
+                <input type="text" id="rule-condition-value" value="${rule.condition.value}">
+            </div>
+            
+            <div class="form-group">
+                <label>Action</label>
+                <select id="rule-action-type">
+                    <option value="jump_to" ${rule.action.type === 'jump_to' ? 'selected' : ''}>Jump to</option>
+                    <option value="end_form" ${rule.action.type === 'end_form' ? 'selected' : ''}>End form</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="target-question-group" ${rule.action.type === 'end_form' ? 'style="display:none;"' : ''}>
+                <label>Target question</label>
+                <select id="rule-action-target">
+                    <option value="">Select a question</option>
+                    ${window.formBuilderState.form.questions
+                        .filter(q => q.id !== question.id) // Exclude current question
+                        .map(q => `<option value="${q.id}" ${rule.action.target_id === q.id ? 'selected' : ''}>${q.title}</option>`)
+                        .join('')}
+                    <option value="end" ${rule.action.target_id === 'end' ? 'selected' : ''}>End screen</option>
+                </select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-outline" id="cancel-rule-edit">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-rule-edit">Save Rule</button>
+            </div>
+        `;
+        
+        // Replace the rule element with the form
+        const ruleElement = document.querySelector(`.logic-rule:nth-child(${index + 1})`);
+        if (ruleElement) {
+            ruleElement.replaceWith(ruleForm);
+        } else {
+            document.getElementById("logic-rules-container").appendChild(ruleForm);
+        }
+        
+        // Add event listener for action type change
+        document.getElementById("rule-action-type").addEventListener("change", function() {
+            const targetGroup = document.getElementById("target-question-group");
+            if (this.value === "end_form") {
+                targetGroup.style.display = "none";
+            } else {
+                targetGroup.style.display = "block";
+            }
+        });
+        
+        // Add event listener for save button
+        document.getElementById("save-rule-edit").addEventListener("click", function() {
+            // Update rule with form values
+            rule.condition.question_id = document.getElementById("rule-condition-question").value;
+            rule.condition.operator = document.getElementById("rule-condition-operator").value;
+            rule.condition.value = document.getElementById("rule-condition-value").value;
+            rule.action.type = document.getElementById("rule-action-type").value;
+            
+            if (rule.action.type === "jump_to") {
+                rule.action.target_id = document.getElementById("rule-action-target").value;
+            } else {
+                rule.action.target_id = null;
+            }
+            
+            // Re-render rules
+            renderLogicRules(question);
+        });
+        
+        // Add event listener for cancel button
+        document.getElementById("cancel-rule-edit").addEventListener("click", function() {
+            renderLogicRules(question);
+        });
+    }
+    
+    function deleteLogicRule(index) {
+        const question = window.formBuilderState.editingQuestion;
+        if (!question || !question.logic) return;
+        
+        // Remove the rule
+        question.logic.splice(index, 1);
+        
+        // If no more rules, set logic to null
+        if (question.logic.length === 0) {
+            question.logic = null;
+        }
+        
+        // Re-render rules
+        renderLogicRules(question);
+    }
+    
+    function saveLogic() {
+        // Logic is already saved as it's edited
+        // Just close the modal
+        closeAllModals();
     }
     
     function openDynamicRuleModal() {
@@ -1102,21 +1302,17 @@ function getQuestionPreviewContent(question) {
             }
         }
         
-        // Add event listeners for rule deletion
+        // Add event listener for delete buttons
         rulesContainer.addEventListener("click", function(e) {
-            if (e.target.closest(".btn-delete-dynamic-rule")) {
-                const button = e.target.closest(".btn-delete-dynamic-rule");
-                const questionId = button.dataset.question;
-                const conditionKey = button.dataset.condition;
+            const deleteButton = e.target.closest(".btn-delete-dynamic-rule");
+            if (deleteButton) {
+                const questionId = deleteButton.dataset.question;
+                const conditionKey = deleteButton.dataset.condition;
                 
-                // Delete the rule
-                delete window.formBuilderState.form.end_screen.dynamic_content[questionId][conditionKey];
-                
-                // If no more rules for this question, delete the question entry
-                if (Object.keys(window.formBuilderState.form.end_screen.dynamic_content[questionId]).length === 0) {
-                    delete window.formBuilderState.form.end_screen.dynamic_content[questionId];
-                }
-                
+                if (questionId && conditionKey && window.formBuilderState.form.end_screen.dynamic_content[questionId]) {
+                    // Delete the rule
+                    delete window.formBuilderState.form.end_screen.dynamic_content[questionId][conditionKey];
+                    
                 // If no more rules at all, set dynamic_content to null
                 if (Object.keys(window.formBuilderState.form.end_screen.dynamic_content).length === 0) {
                     window.formBuilderState.form.end_screen.dynamic_content = null;
@@ -1125,138 +1321,142 @@ function getQuestionPreviewContent(question) {
                 // Re-render dynamic rules
                 renderDynamicRules(window.formBuilderState.form.end_screen.dynamic_content);
             }
-        });
-    }
+        }
+    });
+}
+
+function makeQuestionsSortable() {
+    // For a real implementation, you would use a library like SortableJS
+    // This is a simplified version
+    const questionsContainer = document.getElementById("questions-container");
+    if (!questionsContainer) return;
     
-    function makeQuestionsSortable() {
-        // For a real implementation, you would use a library like SortableJS
-        // This is a simplified version
-        const questionsContainer = document.getElementById("questions-container");
-        if (!questionsContainer) return;
-        
-        // Add drag handles and make sortable
-        const questionItems = questionsContainer.querySelectorAll(".question-item");
-        questionItems.forEach(item => {
-            // Add drag handle if not already present
-            if (!item.querySelector(".drag-handle")) {
-                const dragHandle = document.createElement("div");
-                dragHandle.className = "drag-handle";
-                dragHandle.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1"></circle><circle cx="8" cy="16" r="1"></circle><circle cx="16" cy="8" r="1"></circle><circle cx="16" cy="16" r="1"></circle></svg>
-                `;
-                item.querySelector(".question-header").insertBefore(dragHandle, item.querySelector(".question-type-indicator"));
+    // Add drag handles and make sortable
+    const questionItems = questionsContainer.querySelectorAll(".question-item");
+    questionItems.forEach(item => {
+        // Add drag handle if not already present
+        if (!item.querySelector(".drag-handle")) {
+            const dragHandle = document.createElement("div");
+            dragHandle.className = "drag-handle";
+            dragHandle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1"></circle><circle cx="8" cy="16" r="1"></circle><circle cx="16" cy="8" r="1"></circle><circle cx="16" cy="16" r="1"></circle></svg>
+            `;
+            const questionHeader = item.querySelector(".question-header");
+            if (questionHeader && questionHeader.firstChild) {
+                questionHeader.insertBefore(dragHandle, questionHeader.firstChild);
             }
-        });
-        
-        // In a real implementation, you would initialize SortableJS here
-        // and update the questions array when items are reordered
+        }
+    });
+    
+    // In a real implementation, you would initialize SortableJS here
+    // and update the questions array when items are reordered
+}
+
+async function saveForm() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+        alert("You must be logged in to save a form");
+        return;
     }
     
-    async function saveForm() {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            alert("You must be logged in to save a form");
+    try {
+        // Get form data from state
+        const formData = window.formBuilderState.form;
+        
+        // Validate form data
+        if (!formData.title) {
+            alert("Please enter a form title");
             return;
         }
         
-        try {
-            // Get form data from state
-            const formData = window.formBuilderState.form;
-            
-            // Validate form data
-            if (!formData.title) {
-                alert("Please enter a form title");
-                return;
-            }
-            
-            if (!formData.start_screen.title) {
-                alert("Please enter a start screen title");
-                changeSection("start-screen");
-                return;
-            }
-            
-            if (!formData.end_screen.title) {
-                alert("Please enter an end screen title");
-                changeSection("end-screen");
-                return;
-            }
-            
-            if (formData.questions.length === 0) {
-                alert("Please add at least one question");
-                changeSection("questions");
-                return;
-            }
-            
-            // Check if editing existing form or creating new one
-            const urlParams = new URLSearchParams(window.location.search);
-            const formId = urlParams.get("id");
-            
-            let response;
-            if (formId) {
-                // Update existing form
-                response = await fetch(`${API_URL}/forms/${formId}`, {
-                    method: "PUT",
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(formData)
-                });
-            } else {
-                // Create new form
-                response = await fetch(`${API_URL}/forms`, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(formData)
-                });
-            }
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || "Failed to save form");
-            }
-            
-            const savedForm = await response.json();
-            
-            // Show success message
-            alert("Form saved successfully!");
-            
-            // Redirect to forms page
-            window.location.href = "forms.html";
-            
-        } catch (error) {
-            console.error("Error saving form:", error);
-            alert("Error saving form: " + error.message);
+        if (!formData.start_screen.title) {
+            alert("Please enter a start screen title");
+            changeSection("start-screen");
+            return;
         }
+        
+        if (!formData.end_screen.title) {
+            alert("Please enter an end screen title");
+            changeSection("end-screen");
+            return;
+        }
+        
+        if (formData.questions.length === 0) {
+            alert("Please add at least one question");
+            changeSection("questions");
+            return;
+        }
+        
+        // Check if editing existing form or creating new one
+        const urlParams = new URLSearchParams(window.location.search);
+        const formId = urlParams.get("id");
+        
+        let response;
+        if (formId) {
+            // Update existing form
+            response = await fetch(`${API_URL}/forms/${formId}`, {
+                method: "PUT",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(formData)
+            });
+        } else {
+            // Create new form
+            response = await fetch(`${API_URL}/forms`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(formData)
+            });
+        }
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Failed to save form");
+        }
+        
+        const savedForm = await response.json();
+        
+        // Show success message
+        alert("Form saved successfully!");
+        
+        // Redirect to forms page
+        window.location.href = "forms.html";
+        
+    } catch (error) {
+        console.error("Error saving form:", error);
+        alert("Error saving form: " + error.message);
     }
+}
+
+function previewForm() {
+    // Create a preview modal
+    const modal = document.getElementById("preview-modal");
+    if (!modal) return;
     
-    function previewForm() {
-        // Create a preview modal
-        const modal = document.getElementById("preview-modal");
-        if (!modal) return;
-        
-        // Get the preview iframe
-        const previewFrame = document.getElementById("preview-frame");
-        if (!previewFrame) return;
-        
-        // Create a temporary HTML document for preview
-        const formData = window.formBuilderState.form;
-        
-        // Generate HTML for the form preview
-        const previewHtml = generatePreviewHtml(formData);
-        
-        // Set the iframe content
-        previewFrame.srcdoc = previewHtml;
-        
-        // Show the modal
-        modal.classList.add("active");
-    }
+    // Get the preview iframe
+    const previewFrame = document.getElementById("preview-frame");
+    if (!previewFrame) return;
     
-    function generatePreviewHtml(formData) {
-        return `
+    // Create a temporary HTML document for preview
+    const formData = window.formBuilderState.form;
+    
+    // Generate HTML for the form preview
+    const previewHtml = generatePreviewHtml(formData);
+    
+    // Set the iframe content
+    previewFrame.srcdoc = previewHtml;
+    
+    // Show the modal
+    modal.classList.add("active");
+}
+
+function generatePreviewHtml(formData) {
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -1265,439 +1465,439 @@ function getQuestionPreviewContent(question) {
             <title>${formData.title}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            
-            body {
-                font-family: 'Inter', sans-serif;
-                background: ${formData.theme?.background_color || '#fff'};
-                color: ${formData.theme?.text_color || '#000'};
-                min-height: 100vh;
-                width: 100%;
-                position: relative;
-                overflow-x: hidden;
-            }
-            
-            .progress {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 3px;
-                background: #eee;
-                z-index: 100;
-            }
-            
-            .progress-bar {
-                height: 100%;
-                width: 0;
-                background: ${formData.theme?.primary_color || '#000'};
-                transition: width 0.5s ease;
-            }
-            
-            .container {
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 40px 20px;
-                min-height: 100vh;
-                display: flex;
-                flex-direction: column;
-                position: relative;
-            }
-            
-            .logo {
-                position: absolute;
-                top: 40px;
-                left: 20px;
-                font-weight: 500;
-                font-size: 20px;
-            }
-            
-            .slide {
-                display: none;
-                padding-top: 120px;
-                animation: fadeIn 0.5s ease forwards;
-            }
-            
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            
-            .slide.active {
-                display: block;
-            }
-            
-            h1 {
-                font-size: 32px;
-                font-weight: 300;
-                margin-bottom: 20px;
-                line-height: 1.2;
-            }
-            
-            p {
-                font-size: 16px;
-                font-weight: 300;
-                color: #666;
-                margin-bottom: 30px;
-                line-height: 1.5;
-            }
-            
-            .input {
-                width: 100%;
-                padding: 15px;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                font-family: 'Inter', sans-serif;
-                font-size: 16px;
-                margin-bottom: 30px;
-                transition: border-color 0.3s ease;
-            }
-            
-            .input:focus {
-                outline: none;
-                border-color: ${formData.theme?.primary_color || '#000'};
-            }
-            
-            textarea.input {
-                min-height: 120px;
-                resize: none;
-            }
-            
-            .btn {
-                width: 100%;
-                padding: 15px;
-                background: ${formData.theme?.primary_color || '#000'};
-                color: #fff;
-                border: none;
-                border-radius: 8px;
-                font-family: 'Inter', sans-serif;
-                font-size: 16px;
-                font-weight: 400;
-                cursor: pointer;
-                transition: background-color 0.3s ease, transform 0.1s ease;
-            }
-            
-            .btn:hover {
-                background: ${formData.theme?.primary_color ? adjustColor(formData.theme.primary_color, -20) : '#333'};
-            }
-            
-            .btn:active {
-                transform: scale(0.98);
-            }
-            
-            .btn-back {
-                background: transparent;
-                color: #666;
-                border: 1px solid #ddd;
-                margin-top: 15px;
-            }
-            
-            .btn-back:hover {
-                background: #f5f5f5;
-                color: #333;
-            }
-            
-            .rating-group {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin-bottom: 30px;
-            }
-            
-            .rating-btn {
-                width: 45px;
-                height: 45px;
-                border-radius: 50%;
-                border: 1px solid #ddd;
-                background: transparent;
-                font-size: 16px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            }
-            
-            .rating-btn:hover {
-                border-color: #999;
-                background: #f9f9f9;
-            }
-            
-            .rating-btn.selected {
-                background: ${formData.theme?.primary_color || '#000'};
-                color: #fff;
-                border-color: ${formData.theme?.primary_color || '#000'};
-            }
-            
-            .options {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-                margin-bottom: 30px;
-            }
-            
-            .option {
-                padding: 15px;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                cursor: pointer;
-                text-align: left;
-                transition: all 0.3s ease;
-            }
-            
-            .option:hover {
-                border-color: #999;
-                background: #f9f9f9;
-            }
-            
-            .option.selected {
-                border-color: ${formData.theme?.primary_color || '#000'};
-                background: #f9f9f9;
-            }
-            
-            .option h3 {
-                font-size: 16px;
-                font-weight: 500;
-                margin-bottom: 5px;
-            }
-            
-            .option p {
-                font-size: 14px;
-                margin-bottom: 0;
-            }
-            
-            .checkbox-option {
-                display: flex;
-                align-items: flex-start;
-                padding: 12px 15px;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                margin-bottom: 10px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            }
-            
-            .checkbox-option:hover {
-                border-color: #999;
-                background: #f9f9f9;
-            }
-            
-            .checkbox-option.selected {
-                border-color: ${formData.theme?.primary_color || '#000'};
-                background: #f9f9f9;
-            }
-            
-            .checkbox-option input {
-                margin-right: 10px;
-                margin-top: 3px;
-            }
-            
-            .checkbox-option label {
-                flex: 1;
-                cursor: pointer;
-            }
-            
-            .success {
-                text-align: center;
-                padding-top: 60px;
-            }
-            
-            .checkmark {
-                width: 80px;
-                height: 80px;
-                margin: 0 auto 30px;
-            }
-            
-            .checkmark svg {
-                width: 100%;
-                height: 100%;
-            }
-            
-            @media (max-width: 480px) {
-                .options {
-                    grid-template-columns: 1fr;
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: 'Inter', sans-serif;
+                    background: ${formData.theme?.background_color || '#fff'};
+                    color: ${formData.theme?.text_color || '#000'};
+                    min-height: 100vh;
+                    width: 100%;
+                    position: relative;
+                    overflow-x: hidden;
+                }
+                
+                .progress {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 3px;
+                    background: #eee;
+                    z-index: 100;
+                }
+                
+                .progress-bar {
+                    height: 100%;
+                    width: 0;
+                    background: ${formData.theme?.primary_color || '#000'};
+                    transition: width 0.5s ease;
+                }
+                
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 40px 20px;
+                    min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
+                    position: relative;
                 }
                 
                 .logo {
-                    font-size: 18px;
-                    top: 30px;
+                    position: absolute;
+                    top: 40px;
+                    left: 20px;
+                    font-weight: 500;
+                    font-size: 20px;
                 }
                 
                 .slide {
-                    padding-top: 100px;
+                    display: none;
+                    padding-top: 120px;
+                    animation: fadeIn 0.5s ease forwards;
+                }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                .slide.active {
+                    display: block;
                 }
                 
                 h1 {
-                    font-size: 28px;
-                }
-            }
-            
-            ${formData.theme?.custom_css || ''}
-            ${formData.start_screen?.custom_css || ''}
-            ${formData.end_screen?.custom_css || ''}
-        </style>
-    </head>
-    <body>
-        <div class="progress">
-            <div class="progress-bar" id="progress"></div>
-        </div>
-        
-        <div class="container">
-            <div class="logo">FlyForms</div>
-            
-            <!-- Start Screen -->
-            <div class="slide active" id="slide-start">
-                <h1>${formData.start_screen.title}</h1>
-                <p>${formData.start_screen.description || ''}</p>
-                <button class="btn" onclick="nextSlide('start')">Get Started</button>
-            </div>
-            
-            <!-- Questions -->
-            ${formData.questions.map((question, index) => `
-                <div class="slide" id="slide-${question.id}">
-                    <h1>${question.title}</h1>
-                    ${question.description ? `<p>${question.description}</p>` : ''}
-                    ${getQuestionInputHtml(question)}
-                    <div class="button-container">
-                        <button class="btn" onclick="nextSlide('${question.id}')">${index === formData.questions.length - 1 ? 'Submit' : 'Continue'}</button>
-                        <button class="btn btn-back" onclick="prevSlide('${question.id}', ${index})">Back</button>
-                    </div>
-                </div>
-            `).join('')}
-            
-            <!-- End Screen -->
-            <div class="slide" id="slide-end">
-                <div class="success">
-                    <div class="checkmark">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                            <circle cx="26" cy="26" r="25" fill="none" stroke="${formData.theme?.primary_color || '#000'}" stroke-width="2"/>
-                            <path fill="none" stroke="${formData.theme?.primary_color || '#000'}" stroke-width="2" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-                        </svg>
-                    </div>
-                    <h1>${formData.end_screen.title}</h1>
-                    <p>${formData.end_screen.description || ''}</p>
-                    <button class="btn" onclick="resetForm()">Start Over</button>
-                </div>
-            </div>
-        </div>
-        
-        <script>
-            let currentSlide = 'start';
-            const questions = ${JSON.stringify(formData.questions.map(q => q.id))};
-            const totalSlides = questions.length + 2; // start + questions + end
-            
-            // Update progress bar
-            function updateProgress() {
-                let currentIndex;
-                
-                if (currentSlide === 'start') {
-                    currentIndex = 0;
-                } else if (currentSlide === 'end') {
-                    currentIndex = totalSlides - 1;
-                } else {
-                    currentIndex = questions.indexOf(currentSlide) + 1;
+                    font-size: 32px;
+                    font-weight: 300;
+                    margin-bottom: 20px;
+                    line-height: 1.2;
                 }
                 
-                const percent = (currentIndex / (totalSlides - 1)) * 100;
-                document.getElementById('progress').style.width = percent + '%';
-            }
-            
-            // Go to next slide
-            function nextSlide(currentId) {
-                // Hide current slide
-                document.getElementById('slide-' + currentId).classList.remove('active');
+                p {
+                    font-size: 16px;
+                    font-weight: 300;
+                    color: #666;
+                    margin-bottom: 30px;
+                    line-height: 1.5;
+                }
                 
-                // Determine next slide
-                let nextId;
+                .input {
+                    width: 100%;
+                    padding: 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 16px;
+                    margin-bottom: 30px;
+                    transition: border-color 0.3s ease;
+                }
                 
-                if (currentId === 'start') {
-                    // If we're on start screen, go to first question
-                    nextId = questions[0];
-                } else if (currentId === 'end') {
-                    // If we're on end screen, reset form
-                    resetForm();
-                    return;
-                } else {
-                    // Find current question index
-                    const currentIndex = questions.indexOf(currentId);
+                .input:focus {
+                    outline: none;
+                    border-color: ${formData.theme?.primary_color || '#000'};
+                }
+                
+                textarea.input {
+                    min-height: 120px;
+                    resize: none;
+                }
+                
+                .btn {
+                    width: 100%;
+                    padding: 15px;
+                    background: ${formData.theme?.primary_color || '#000'};
+                    color: #fff;
+                    border: none;
+                    border-radius: 8px;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 16px;
+                    font-weight: 400;
+                    cursor: pointer;
+                    transition: background-color 0.3s ease, transform 0.1s ease;
+                }
+                
+                .btn:hover {
+                    background: ${formData.theme?.primary_color ? adjustColor(formData.theme.primary_color, -20) : '#333'};
+                }
+                
+                .btn:active {
+                    transform: scale(0.98);
+                }
+                
+                .btn-back {
+                    background: transparent;
+                    color: #666;
+                    border: 1px solid #ddd;
+                    margin-top: 15px;
+                }
+                
+                .btn-back:hover {
+                    background: #f5f5f5;
+                    color: #333;
+                }
+                
+                .rating-group {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-bottom: 30px;
+                }
+                
+                .rating-btn {
+                    width: 45px;
+                    height: 45px;
+                    border-radius: 50%;
+                    border: 1px solid #ddd;
+                    background: transparent;
+                    font-size: 16px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                
+                .rating-btn:hover {
+                    border-color: #999;
+                    background: #f9f9f9;
+                }
+                
+                .rating-btn.selected {
+                    background: ${formData.theme?.primary_color || '#000'};
+                    color: #fff;
+                    border-color: ${formData.theme?.primary_color || '#000'};
+                }
+                
+                .options {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                    margin-bottom: 30px;
+                }
+                
+                .option {
+                    padding: 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    text-align: left;
+                    transition: all 0.3s ease;
+                }
+                
+                .option:hover {
+                    border-color: #999;
+                    background: #f9f9f9;
+                }
+                
+                .option.selected {
+                    border-color: ${formData.theme?.primary_color || '#000'};
+                    background: #f9f9f9;
+                }
+                
+                .option h3 {
+                    font-size: 16px;
+                    font-weight: 500;
+                    margin-bottom: 5px;
+                }
+                
+                .option p {
+                    font-size: 14px;
+                    margin-bottom: 0;
+                }
+                
+                .checkbox-option {
+                    display: flex;
+                    align-items: flex-start;
+                    padding: 12px 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    margin-bottom: 10px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                
+                .checkbox-option:hover {
+                    border-color: #999;
+                    background: #f9f9f9;
+                }
+                
+                .checkbox-option.selected {
+                    border-color: ${formData.theme?.primary_color || '#000'};
+                    background: #f9f9f9;
+                }
+                
+                .checkbox-option input {
+                    margin-right: 10px;
+                    margin-top: 3px;
+                }
+                
+                .checkbox-option label {
+                    flex: 1;
+                    cursor: pointer;
+                }
+                
+                .success {
+                    text-align: center;
+                    padding-top: 60px;
+                }
+                
+                .checkmark {
+                    width: 80px;
+                    height: 80px;
+                    margin: 0 auto 30px;
+                }
+                
+                .checkmark svg {
+                    width: 100%;
+                    height: 100%;
+                }
+                
+                @media (max-width: 480px) {
+                    .options {
+                        grid-template-columns: 1fr;
+                    }
                     
-                    if (currentIndex === questions.length - 1) {
-                        // If this is the last question, go to end screen
-                        nextId = 'end';
-                    } else {
-                        // Otherwise go to next question
-                        nextId = questions[currentIndex + 1];
+                    .logo {
+                        font-size: 18px;
+                        top: 30px;
+                    }
+                    
+                    .slide {
+                        padding-top: 100px;
+                    }
+                    
+                    h1 {
+                        font-size: 28px;
                     }
                 }
                 
-                // Show next slide
-                document.getElementById('slide-' + nextId).classList.add('active');
+                ${formData.theme?.custom_css || ''}
+                ${formData.start_screen?.custom_css || ''}
+                ${formData.end_screen?.custom_css || ''}
+            </style>
+        </head>
+        <body>
+            <div class="progress">
+                <div class="progress-bar" id="progress"></div>
+            </div>
+            
+            <div class="container">
+                <div class="logo">FlyForms</div>
                 
-                // Update current slide
-                currentSlide = nextId;
+                <!-- Start Screen -->
+                <div class="slide active" id="slide-start">
+                    <h1>${formData.start_screen.title}</h1>
+                    <p>${formData.start_screen.description || ''}</p>
+                    <button class="btn" onclick="nextSlide('start')">Get Started</button>
+                </div>
+                
+                <!-- Questions -->
+                ${formData.questions.map((question, index) => `
+                    <div class="slide" id="slide-${question.id}">
+                        <h1>${question.title}</h1>
+                        ${question.description ? `<p>${question.description}</p>` : ''}
+                        ${getQuestionInputHtml(question)}
+                        <div class="button-container">
+                            <button class="btn" onclick="nextSlide('${question.id}')">${index === formData.questions.length - 1 ? 'Submit' : 'Continue'}</button>
+                            <button class="btn btn-back" onclick="prevSlide('${question.id}', ${index})">Back</button>
+                        </div>
+                    </div>
+                `).join('')}
+                
+                <!-- End Screen -->
+                <div class="slide" id="slide-end">
+                    <div class="success">
+                        <div class="checkmark">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                                <circle cx="26" cy="26" r="25" fill="none" stroke="${formData.theme?.primary_color || '#000'}" stroke-width="2"/>
+                                <path fill="none" stroke="${formData.theme?.primary_color || '#000'}" stroke-width="2" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                            </svg>
+                        </div>
+                        <h1>${formData.end_screen.title}</h1>
+                        <p>${formData.end_screen.description || ''}</p>
+                        <button class="btn" onclick="resetForm()">Start Over</button>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                let currentSlide = 'start';
+                const questions = ${JSON.stringify(formData.questions.map(q => q.id))};
+                const totalSlides = questions.length + 2; // start + questions + end
                 
                 // Update progress bar
-                updateProgress();
-            }
-            
-            // Go to previous slide
-            function prevSlide(currentId, currentIndex) {
-                // Hide current slide
-                document.getElementById('slide-' + currentId).classList.remove('active');
-                
-                // Determine previous slide
-                let prevId;
-                
-                if (currentIndex === 0) {
-                    // If we're on the first question, go back to start screen
-                    prevId = 'start';
-                } else {
-                    // Otherwise go to the previous question
-                    prevId = questions[currentIndex - 1];
+                function updateProgress() {
+                    let currentIndex;
+                    
+                    if (currentSlide === 'start') {
+                        currentIndex = 0;
+                    } else if (currentSlide === 'end') {
+                        currentIndex = totalSlides - 1;
+                    } else {
+                        currentIndex = questions.indexOf(currentSlide) + 1;
+                    }
+                    
+                    const percent = (currentIndex / (totalSlides - 1)) * 100;
+                    document.getElementById('progress').style.width = percent + '%';
                 }
                 
-                // Show previous slide
-                document.getElementById('slide-' + prevId).classList.add('active');
+                // Go to next slide
+                function nextSlide(currentId) {
+                    // Hide current slide
+                    document.getElementById('slide-' + currentId).classList.remove('active');
+                    
+                    // Determine next slide
+                    let nextId;
+                    
+                    if (currentId === 'start') {
+                        // If we're on start screen, go to first question
+                        nextId = questions[0];
+                    } else if (currentId === 'end') {
+                        // If we're on end screen, reset form
+                        resetForm();
+                        return;
+                    } else {
+                        // Find current question index
+                        const currentIndex = questions.indexOf(currentId);
+                        
+                        if (currentIndex === questions.length - 1) {
+                            // If this is the last question, go to end screen
+                            nextId = 'end';
+                        } else {
+                            // Otherwise go to next question
+                            nextId = questions[currentIndex + 1];
+                        }
+                    }
+                    
+                    // Show next slide
+                    document.getElementById('slide-' + nextId).classList.add('active');
+                    
+                    // Update current slide
+                    currentSlide = nextId;
+                    
+                    // Update progress bar
+                    updateProgress();
+                }
                 
-                // Update current slide
-                currentSlide = prevId;
+                // Go to previous slide
+                function prevSlide(currentId, currentIndex) {
+                    // Hide current slide
+                    document.getElementById('slide-' + currentId).classList.remove('active');
+                    
+                    // Determine previous slide
+                    let prevId;
+                    
+                    if (currentIndex === 0) {
+                        // If we're on the first question, go back to start screen
+                        prevId = 'start';
+                    } else {
+                        // Otherwise go to the previous question
+                        prevId = questions[currentIndex - 1];
+                    }
+                    
+                    // Show previous slide
+                    document.getElementById('slide-' + prevId).classList.add('active');
+                    
+                    // Update current slide
+                    currentSlide = prevId;
+                    
+                    // Update progress bar
+                    updateProgress();
+                }
                 
-                // Update progress bar
+                // Reset form
+                function resetForm() {
+                    // Hide current slide
+                    document.getElementById('slide-' + currentSlide).classList.remove('active');
+                    
+                    // Show start slide
+                    document.getElementById('slide-start').classList.add('active');
+                    
+                    // Reset current slide
+                    currentSlide = 'start';
+                    
+                    // Update progress bar
+                    updateProgress();
+                    
+                    // Reset all inputs
+                    document.querySelectorAll('input, textarea').forEach(input => {
+                        input.value = '';
+                    });
+                    
+                    document.querySelectorAll('.selected').forEach(selected => {
+                        selected.classList.remove('selected');
+                    });
+                }
+                
+                // Initialize
                 updateProgress();
-            }
-            
-            // Reset form
-            function resetForm() {
-                // Hide current slide
-                document.getElementById('slide-' + currentSlide).classList.remove('active');
-                
-                // Show start slide
-                document.getElementById('slide-start').classList.add('active');
-                
-                // Reset current slide
-                currentSlide = 'start';
-                
-                // Update progress bar
-                updateProgress();
-                
-                // Reset all inputs
-                document.querySelectorAll('input, textarea').forEach(input => {
-                    input.value = '';
-                });
-                
-                document.querySelectorAll('.selected').forEach(selected => {
-                    selected.classList.remove('selected');
-                });
-            }
-            
-            // Initialize
-            updateProgress();
-        </script>
-    </body>
-    </html>
+            </script>
+        </body>
+        </html>
     `;
 }
 
