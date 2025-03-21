@@ -8,634 +8,795 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-:root {
-    --primary-color: #000;
-    --primary-hover: #333;
-    --text-color: #000;
-    --text-secondary: #666;
-    --border-color: #ddd;
-    --border-hover: #999;
-    --bg-hover: #f9f9f9;
-    --bg-color: #fff;
-    --error-color: #e74c3c;
-    --animation-duration: 0.5s;
-    --border-radius: 8px;
-}
-
-body {
-    font-family: 'Inter', sans-serif;
-    background: var(--bg-color);
-    color: var(--text-color);
-    min-height: 100vh;
-    width: 100%;
-    position: relative;
-    overflow-x: hidden;
-    transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-.progress {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 4px;
-    background: rgba(128, 128, 128, 0.2);
-    z-index: 100;
-    overflow: hidden;
-}
-
-.progress-bar {
-    height: 100%;
-    width: 0;
-    background: var(--primary-color);
-    transition: width 0.6s cubic-bezier(0.65, 0, 0.35, 1);
-    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
-}
-
-.container {
-    max-width: 650px;
-    margin: 0 auto;
-    padding: 40px 25px;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-}
-
-.logo {
-    position: absolute;
-    top: 40px;
-    left: 25px;
-    font-weight: 600;
-    font-size: 22px;
-    letter-spacing: -0.5px;
-    transition: all 0.3s ease;
-}
-
-.branding {
-    position: fixed;
-    bottom: 20px;
-    left: 0;
-    width: 100%;
-    text-align: center;
-    font-size: 13px;
-    color: var(--text-secondary);
-    padding: 10px;
-    z-index: 10;
-    opacity: 0.8;
-    transition: opacity 0.3s ease;
-}
-
-.branding:hover {
-    opacity: 1;
-}
-
-.branding a {
-    color: var(--text-color);
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
-}
-
-.branding a:hover {
-    opacity: 0.8;
-}
-
-.slide {
-    display: none;
-    padding-top: 130px;
-    opacity: 0;
-    transform: translateY(30px);
-    transition: opacity var(--animation-duration) cubic-bezier(0.25, 1, 0.5, 1), 
-                transform var(--animation-duration) cubic-bezier(0.25, 1, 0.5, 1);
-    will-change: opacity, transform;
-    pointer-events: none;
-}
-
-.slide.active {
-    display: block;
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-}
-
-h1 {
-    font-size: 32px;
-    font-weight: 600;
-    margin-bottom: 20px;
-    line-height: 1.3;
-    letter-spacing: -0.5px;
-}
-
-p {
-    font-size: 17px;
-    font-weight: 400;
-    color: var(--text-secondary);
-    margin-bottom: 30px;
-    line-height: 1.6;
-}
-
-.input {
-    width: 100%;
-    padding: 16px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    font-family: 'Inter', sans-serif;
-    font-size: 16px;
-    margin-bottom: 30px;
-    transition: all 0.3s ease;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-
-.input:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
-}
-
-textarea.input {
-    min-height: 130px;
-    resize: none;
-}
-
-.btn {
-    width: 100%;
-    padding: 16px;
-    background: var(--primary-color);
-    color: var(--bg-color);
-    border: none;
-    border-radius: var(--border-radius);
-    font-family: 'Inter', sans-serif;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.btn:hover {
-    background: var(--primary-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.btn:active {
-    transform: scale(0.98);
-    box-shadow: none;
-}
-
-.btn-back {
-    background: transparent;
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    margin-top: 15px;
-}
-
-.btn-back:hover {
-    background: var(--bg-hover);
-    color: var(--text-color);
-    border-color: var(--border-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-}
-
-.btn-ripple {
-    position: absolute;
-    border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.4);
-    transform: scale(0);
-    animation: ripple 0.6s linear;
-    pointer-events: none;
-}
-
-@keyframes ripple {
-    to {
-        transform: scale(4);
-        opacity: 0;
-    }
-}
-
-.rating-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 35px;
-}
-
-.rating-btn {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: 1px solid var(--border-color);
-    background: transparent;
-    font-size: 16px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-    color: var(--text-color);
-}
-
-.rating-btn:hover {
-    border-color: var(--border-hover);
-    background: var(--bg-hover);
-    transform: translateY(-2px);
-}
-
-.rating-btn.selected {
-    background: var(--primary-color);
-    color: var(--bg-color);
-    border-color: var(--primary-color);
-    transform: scale(1.1);
-    font-weight: 600;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-bottom: 35px;
-}
-
-.option {
-    padding: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-    background-color: var(--bg-color);
-}
-
-.option:hover {
-    border-color: var(--border-hover);
-    background: var(--bg-hover);
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-}
-
-.option.selected {
-    border-color: var(--primary-color);
-    background: var(--bg-hover);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    transform: translateY(-3px);
-}
-
-.option h3 {
-    font-size: 17px;
-    font-weight: 500;
-    margin-bottom: 6px;
-    color: var(--text-color);
-}
-
-.option p {
-    font-size: 14px;
-    margin-bottom: 0;
-    color: var(--text-secondary);
-}
-
-.checkbox-option {
-    display: flex;
-    align-items: flex-start;
-    padding: 15px 18px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    margin-bottom: 12px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-    background-color: var(--bg-color);
-}
-
-.checkbox-option:hover {
-    border-color: var(--border-hover);
-    background: var(--bg-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-}
-
-.checkbox-option.selected {
-    border-color: var(--primary-color);
-    background: var(--bg-hover);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.checkbox-option input {
-    margin-right: 12px;
-    margin-top: 3px;
-    accent-color: var(--primary-color);
-    transform: scale(1.2);
-}
-
-.checkbox-option label {
-    flex: 1;
-    cursor: pointer;
-    color: var(--text-color);
-    font-size: 16px;
-}
-
-.success {
-    text-align: center;
-    padding-top: 60px;
-}
-
-.checkmark {
-    width: 90px;
-    height: 90px;
-    margin: 0 auto 35px;
-    animation: checkmark-appear 1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
-}
-
-@keyframes checkmark-appear {
-    0% {
-        opacity: 0;
-        transform: scale(0.5);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1.1);
-    }
-    70% {
-        transform: scale(0.95);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
-.checkmark svg {
-    width: 100%;
-    height: 100%;
-    stroke: var(--primary-color);
-}
-
-.checkmark svg circle {
-    stroke: var(--primary-color);
-    stroke-dasharray: 166;
-    stroke-dashoffset: 166;
-    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
-    animation-delay: 0.2s;
-}
-
-.checkmark svg path {
-    stroke: var(--primary-color);
-    stroke-dasharray: 48;
-    stroke-dashoffset: 48;
-    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.35, 1) forwards;
-    animation-delay: 0.8s;
-}
-
-@keyframes stroke {
-    100% {
-        stroke-dashoffset: 0;
-    }
-}
-
-.error-state {
-    text-align: center;
-    padding-top: 60px;
-}
-
-.error-icon {
-    width: 90px;
-    height: 90px;
-    margin: 0 auto 35px;
-    color: var(--error-color);
-    animation: error-appear 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-@keyframes error-appear {
-    0% {
-        opacity: 0;
-        transform: scale(0.5) rotate(-10deg);
-    }
-    50% {
-        transform: scale(1.1) rotate(5deg);
-    }
-    70% {
-        transform: scale(0.95) rotate(0deg);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1) rotate(0deg);
-    }
-}
-
-.error-icon svg {
-    width: 100%;
-    height: 100%;
-    stroke: var(--error-color);
-    stroke-width: 2;
-}
-
-.loading {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--bg-color);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    opacity: 1;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.loading.hidden {
-    opacity: 0;
-    visibility: hidden;
-}
-
-.spinner {
-    width: 45px;
-    height: 45px;
-    border: 3px solid rgba(128, 128, 128, 0.2);
-    border-radius: 50%;
-    border-top-color: var(--primary-color);
-    animation: spin 0.8s ease-in-out infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.scale-container {
-    margin-bottom: 30px;
-    width: 100%;
-}
-
-.scale-slider {
-    width: 100%;
-    height: 6px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: var(--border-color);
-    border-radius: 3px;
-    outline: none;
-    margin-bottom: 15px;
-}
-
-.scale-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 22px;
-    height: 22px;
-    background: var(--primary-color);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.scale-slider::-moz-range-thumb {
-    width: 22px;
-    height: 22px;
-    background: var(--primary-color);
-    border-radius: 50%;
-    cursor: pointer;
-    border: none;
-    transition: all 0.3s ease;
-}
-
-.scale-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-}
-
-.scale-slider::-moz-range-thumb:hover {
-    transform: scale(1.2);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-}
-
-.scale-value {
-    text-align: center;
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--primary-color);
-}
-
-.file-input {
-    padding: 12px;
-    background: var(--bg-hover);
-}
-
-.location-btn {
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.location-btn svg {
-    width: 18px;
-    height: 18px;
-}
-
-/* Responsive improvements */
-@media (max-width: 768px) {
-    .container {
-        padding: 30px 20px;
-    }
-    
-    h1 {
-        font-size: 28px;
-    }
-    
-    p {
-        font-size: 16px;
-    }
-    
-    .slide {
-        padding-top: 110px;
-    }
-    
-    .logo {
-        font-size: 20px;
-        top: 30px;
-    }
-    
-    .checkmark, .error-icon {
-        width: 80px;
-        height: 80px;
-        margin-bottom: 25px;
-    }
-}
-
-@media (max-width: 480px) {
-    .options {
-        grid-template-columns: 1fr;
-    }
-    
-    h1 {
-        font-size: 24px;
-    }
-    
-    .slide {
-        padding-top: 90px;
-    }
-    
-    .logo {
-        font-size: 18px;
-        top: 25px;
-        left: 20px;
-    }
-    
-    .input, .btn {
-        padding: 14px;
-    }
-    
-    .rating-group {
-        justify-content: center;
-    }
-    
-    .rating-btn {
-        width: 42px;
-        height: 42px;
-    }
-    
-    .option {
-        padding: 15px;
-    }
-    
-    .option h3 {
-        font-size: 16px;
-    }
-    
-    .branding {
-        font-size: 12px;
-    }
-}
-
-/* Additional animations */
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-
-.btn-submit {
-    animation: pulse 2s infinite;
-}
-
-/* Improved transitions between slides */
-.slide.exit {
-    opacity: 0;
-    transform: translateY(-20px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.slide.enter {
-    opacity: 0;
-    transform: translateY(30px);
-}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #000;
+            --primary-hover: #333;
+            --text-color: #000;
+            --text-secondary: #666;
+            --border-color: #ddd;
+            --border-hover: #999;
+            --bg-hover: #f9f9f9;
+            --bg-color: #fff;
+            --error-color: #e74c3c;
+            --animation-duration: 0.5s;
+            --border-radius: 8px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            width: 100%;
+            position: relative;
+            overflow-x: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(128, 128, 128, 0.2);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background: var(--primary-color);
+            transition: width 0.6s cubic-bezier(0.65, 0, 0.35, 1);
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+            padding: 40px 25px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .logo {
+            position: absolute;
+            top: 40px;
+            left: 25px;
+            font-weight: 600;
+            font-size: 22px;
+            letter-spacing: -0.5px;
+            transition: all 0.3s ease;
+        }
+
+        .branding {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 10px;
+            z-index: 10;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .branding:hover {
+            opacity: 1;
+        }
+
+        .branding a {
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .branding a:hover {
+            opacity: 0.8;
+        }
+
+        .create-own {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-decoration: underline;
+        }
+
+        .slide {
+            display: none;
+            padding-top: 130px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity var(--animation-duration) cubic-bezier(0.25, 1, 0.5, 1), 
+                        transform var(--animation-duration) cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: opacity, transform;
+            pointer-events: none;
+            height: 100vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .slide.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            line-height: 1.3;
+            letter-spacing: -0.5px;
+        }
+
+        p {
+            font-size: 17px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .input {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+        }
+
+        textarea.input {
+            min-height: 130px;
+            resize: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary-color);
+            color: var(--bg-color);
+            border: none;
+            border-radius: var(--border-radius);
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+            box-shadow: none;
+        }
+
+        .btn-back {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            margin-top: 15px;
+        }
+
+        .btn-back:hover {
+            background: var(--bg-hover);
+            color: var(--text-color);
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn-ripple {
+            position: absolute;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.4);
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .rating-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 35px;
+        }
+
+        .rating-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            color: var(--text-color);
+        }
+
+        .rating-btn:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-hover);
+            transform: translateY(-2px);
+        }
+
+        .rating-btn.selected {
+            background: var(--primary-color);
+            color: var(--bg-color);
+            border-color: var(--primary-color);
+            transform: scale(1.1);
+            font-weight: 600;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 35px;
+        }
+
+        .option {
+            padding: 18px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            background-color: var(--bg-color);
+        }
+
+        .option:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-hover);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .option.selected {
+            border-color: var(--primary-color);
+            background: var(--bg-hover);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transform: translateY(-3px);
+        }
+
+        .option h3 {
+            font-size: 17px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-color);
+        }
+
+        .option p {
+            font-size: 14px;
+            margin-bottom: 0;
+            color: var(--text-secondary);
+        }
+
+        .checkbox-option {
+            display: flex;
+            align-items: flex-start;
+            padding: 15px 18px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            background-color: var(--bg-color);
+        }
+
+        .checkbox-option:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .checkbox-option.selected {
+            border-color: var(--primary-color);
+            background: var(--bg-hover);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .checkbox-option input {
+            margin-right: 12px;
+            margin-top: 3px;
+            accent-color: var(--primary-color);
+            transform: scale(1.2);
+        }
+
+        .checkbox-option label {
+            flex: 1;
+            cursor: pointer;
+            color: var(--text-color);
+            font-size: 16px;
+        }
+
+        .success {
+            text-align: center;
+            padding-top: 60px;
+        }
+
+        .checkmark {
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 35px;
+            animation: checkmark-appear 1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+        }
+
+        @keyframes checkmark-appear {
+            0% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.1);
+            }
+            70% {
+                transform: scale(0.95);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .checkmark svg {
+            width: 100%;
+            height: 100%;
+            stroke: var(--primary-color);
+        }
+
+        .checkmark svg circle {
+            stroke: var(--primary-color);
+            stroke-dasharray: 166;
+            stroke-dashoffset: 166;
+            animation: stroke 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+            animation-delay: 0.2s;
+        }
+
+        .checkmark svg path {
+            stroke: var(--primary-color);
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            animation: stroke 0.3s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+            animation-delay: 0.8s;
+        }
+
+        @keyframes stroke {
+            100% {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .error-state {
+            text-align: center;
+            padding-top: 60px;
+        }
+
+        .error-icon {
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 35px;
+            color: var(--error-color);
+            animation: error-appear 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+
+        @keyframes error-appear {
+            0% {
+                opacity: 0;
+                transform: scale(0.5) rotate(-10deg);
+            }
+            50% {
+                transform: scale(1.1) rotate(5deg);
+            }
+            70% {
+                transform: scale(0.95) rotate(0deg);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+        }
+
+        .error-icon svg {
+            width: 100%;
+            height: 100%;
+            stroke: var(--error-color);
+            stroke-width: 2;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 1;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        .loading.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loading-logo {
+            margin-bottom: 20px;
+            font-weight: 600;
+            font-size: 24px;
+            letter-spacing: -0.5px;
+        }
+
+        .loading-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+        }
+
+        .loading-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0;
+            background: var(--primary-color);
+            animation: loading-progress 2s ease-in-out forwards;
+        }
+
+        @keyframes loading-progress {
+            0% { width: 0; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+
+        .scale-container {
+            margin-bottom: 30px;
+            width: 100%;
+        }
+
+        .scale-slider {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border-color);
+            border-radius: 3px;
+            outline: none;
+            margin-bottom: 15px;
+        }
+
+        .scale-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .scale-slider::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .scale-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .scale-slider::-moz-range-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .scale-value {
+            text-align: center;
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .file-input {
+            padding: 12px;
+            background: var(--bg-hover);
+        }
+
+        .location-btn {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .location-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Swipe Navigation */
+        .swipe-indicator {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s infinite;
+            opacity: 0.7;
+        }
+
+        .swipe-indicator svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--text-secondary);
+        }
+
+        /* Improved transitions between slides */
+        .slide-transition-enter {
+            opacity: 0;
+            transform: translateY(50px);
+        }
+
+        .slide-transition-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .slide-transition-exit {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .slide-transition-exit-active {
+            opacity: 0;
+            transform: translateY(-50px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        /* Scroll Navigation */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+            animation: bounce 2s infinite;
+        }
+
+        .scroll-indicator:hover {
+            opacity: 1;
+        }
+
+        .scroll-indicator svg {
+            width: 24px;
+            height: 24px;
+            stroke: var(--text-secondary);
+        }
+
+        .scroll-indicator-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0) translateX(-50%);
+            }
+            40% {
+                transform: translateY(-10px) translateX(-50%);
+            }
+            60% {
+                transform: translateY(-5px) translateX(-50%);
+            }
+        }
+
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+            
+            h1 {
+                font-size: 28px;
+            }
+            
+            p {
+                font-size: 16px;
+            }
+            
+            .slide {
+                padding-top: 110px;
+            }
+            
+            .logo {
+                font-size: 20px;
+                top: 30px;
+            }
+            
+            .checkmark, .error-icon {
+                width: 80px;
+                height: 80px;
+                margin-bottom: 25px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .options {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .slide {
+                padding-top: 90px;
+            }
+            
+            .logo {
+                font-size: 18px;
+                top: 25px;
+                left: 20px;
+            }
+            
+            .input, .btn {
+                padding: 14px;
+            }
+            
+            .rating-group {
+                justify-content: center;
+            }
+            
+            .rating-btn {
+                width: 42px;
+                height: 42px;
+            }
+            
+            .option {
+                padding: 15px;
+            }
+            
+            .option h3 {
+                font-size: 16px;
+            }
+            
+            .branding {
+                font-size: 12px;
+            }
+        }
+
+        /* Additional animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .btn-submit {
+            animation: pulse 2s infinite;
+        }
+
+        /* Scroll-based slide navigation */
+        .scroll-nav {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .scroll-nav-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .scroll-nav-dot.active {
+            background: var(--primary-color);
+            transform: scale(1.3);
+        }
+
+        /* Typewriter effect for form title */
+        .typewriter h1 {
+            overflow: hidden;
+            border-right: 0.15em solid var(--primary-color);
+            white-space: nowrap;
+            margin: 0 auto;
+            letter-spacing: -0.5px;
+            animation: 
+                typing 3.5s steps(40, end),
+                blink-caret 0.75s step-end infinite;
+        }
+
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: var(--primary-color) }
+        }
     </style>
 </head>
 <body>
@@ -644,7 +805,11 @@ textarea.input {
     </div>
     
     <div class="loading" id="loading">
-        <div class="spinner"></div>
+        <div class="loading-logo">FlyForms</div>
+        <div class="loading-text">powered by FlyForms</div>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
     </div>
     
     <div class="container" id="form-container">
@@ -653,8 +818,13 @@ textarea.input {
         <!-- This will be populated dynamically -->
     </div>
     
+    <div class="scroll-nav" id="scroll-nav">
+        <!-- This will be populated dynamically -->
+    </div>
+    
     <div class="branding">
         Made with <a href="index.html">FlyForms</a>
+        <a href="index.html" class="create-own">Create your own FlyForm</a>
     </div>
 
     <script>
@@ -663,19 +833,44 @@ textarea.input {
         
         // Extract the form ID from the URL path
         const path = window.location.pathname;
-        const formSlug = path.substring(path.lastIndexOf('/') + 1);
+        let formSlug = null;
         let formState = null;
         let isLoading = true;
         let formFound = false;
+        let touchStartY = 0;
+        let touchEndY = 0;
+        let scrollTimeout = null;
+        
+        // Check if the URL follows the pattern /f/directid
+        if (path.includes('/f/')) {
+            // Extract the ID after /f/
+            const segments = path.split('/');
+            const fIndex = segments.indexOf('f');
+            if (fIndex !== -1 && fIndex < segments.length - 1) {
+                formSlug = segments[fIndex + 1];
+            }
+        } else {
+            // If URL doesn't have /f/ pattern, set formFound to false immediately
+            formFound = false;
+        }
         
         document.addEventListener('DOMContentLoaded', function() {
             // Show loading state
             showLoading();
             
-            // Load form with a slight delay to ensure loading state is visible
-            setTimeout(() => {
-                loadForm(formSlug);
-            }, 300);
+            // If formSlug was found, load the form, otherwise show error
+            if (formSlug) {
+                // Load form with a slight delay to ensure loading state is visible
+                setTimeout(() => {
+                    loadForm(formSlug);
+                }, 1500); // Longer delay to show the loading animation
+            } else {
+                // Render page not found after loading animation
+                setTimeout(() => {
+                    renderErrorState();
+                    hideLoading();
+                }, 1500);
+            }
             
             // Add ripple effect to buttons
             document.addEventListener('click', function(e) {
@@ -683,6 +878,16 @@ textarea.input {
                     createRipple(e);
                 }
             });
+            
+            // Add touch event listeners for swipe navigation
+            document.addEventListener('touchstart', handleTouchStart, false);
+            document.addEventListener('touchend', handleTouchEnd, false);
+            
+            // Add scroll event listener for scroll-based navigation
+            document.addEventListener('wheel', handleScroll, { passive: false });
+            
+            // Add keyboard navigation
+            document.addEventListener('keydown', handleKeyNavigation);
         });
         
         function createRipple(event) {
@@ -726,7 +931,7 @@ textarea.input {
                 if (!isLoading) {
                     loading.style.display = 'none';
                 }
-            }, 300);
+            }, 500);
         }
         
         async function loadForm(slug) {
@@ -748,6 +953,9 @@ textarea.input {
                 // Build the form UI
                 buildFormUI(formData);
                 
+                // Create scroll navigation dots
+                createScrollNav(formData);
+                
                 // Hide loading spinner with a slight delay for smooth transition
                 setTimeout(() => {
                     hideLoading();
@@ -759,6 +967,45 @@ textarea.input {
                 renderErrorState();
                 hideLoading();
             }
+        }
+        
+        function createScrollNav(formData) {
+            const scrollNav = document.getElementById('scroll-nav');
+            scrollNav.innerHTML = '';
+            
+            // Create a dot for the start screen
+            const startDot = document.createElement('div');
+            startDot.className = 'scroll-nav-dot active';
+            startDot.dataset.slide = 'start';
+            startDot.addEventListener('click', () => navigateToSlide('start'));
+            scrollNav.appendChild(startDot);
+            
+            // Create dots for each question
+            formData.questions.forEach(question => {
+                const dot = document.createElement('div');
+                dot.className = 'scroll-nav-dot';
+                dot.dataset.slide = question.id;
+                dot.addEventListener('click', () => navigateToSlide(question.id));
+                scrollNav.appendChild(dot);
+            });
+            
+            // Create a dot for the end screen
+            const endDot = document.createElement('div');
+            endDot.className = 'scroll-nav-dot';
+            endDot.dataset.slide = 'end';
+            endDot.addEventListener('click', () => navigateToSlide('end'));
+            scrollNav.appendChild(endDot);
+        }
+        
+        function updateScrollNav() {
+            const dots = document.querySelectorAll('.scroll-nav-dot');
+            dots.forEach(dot => {
+                if (dot.dataset.slide === formState.currentSlide) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
         }
         
         function renderErrorState() {
@@ -778,9 +1025,6 @@ textarea.input {
             errorSlide.className = 'slide';
             errorSlide.id = 'error-slide';
             
-            const errorState = document.createElement('div');
-            errorState.className = 'error-state';
-            
             const errorIcon = document.createElement('div');
             errorIcon.className = 'error-icon';
             errorIcon.innerHTML = `
@@ -791,7 +1035,7 @@ textarea.input {
             errorTitle.textContent = 'Form Not Found';
             
             const errorDescription = document.createElement('p');
-            errorDescription.textContent ="The form you're looking for doesn't exist or has been removed.";
+            errorDescription.textContent = "The form you're looking for doesn't exist or has been removed.";
             
             const homeButton = document.createElement('a');
             homeButton.href = 'index.html';
@@ -805,6 +1049,9 @@ textarea.input {
             errorSlide.appendChild(errorState);
             
             container.appendChild(errorSlide);
+            
+            // Hide scroll navigation
+            document.getElementById('scroll-nav').style.display = 'none';
             
             // Show the error slide with animation
             setTimeout(() => {
@@ -831,8 +1078,12 @@ textarea.input {
             startScreen.className = 'slide';
             startScreen.id = 'slide-start';
             
+            const titleContainer = document.createElement('div');
+            titleContainer.className = 'typewriter';
+            
             const startTitle = document.createElement('h1');
             startTitle.textContent = formData.start_screen.title;
+            titleContainer.appendChild(startTitle);
             
             const startDescription = document.createElement('p');
             startDescription.textContent = formData.start_screen.description || '';
@@ -842,9 +1093,20 @@ textarea.input {
             startButton.textContent = 'Get Started';
             startButton.onclick = () => navigateToNextSlide('start');
             
-            startScreen.appendChild(startTitle);
+            // Add scroll indicator to start screen
+            const scrollIndicator = document.createElement('div');
+            scrollIndicator.className = 'scroll-indicator';
+            scrollIndicator.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                </svg>
+                <div class="scroll-indicator-text">Scroll or swipe to continue</div>
+            `;
+            
+            startScreen.appendChild(titleContainer);
             startScreen.appendChild(startDescription);
             startScreen.appendChild(startButton);
+            startScreen.appendChild(scrollIndicator);
             
             container.appendChild(startScreen);
             
@@ -877,9 +1139,15 @@ textarea.input {
             const endDescription = document.createElement('p');
             endDescription.textContent = formData.end_screen.description || '';
             
+            const createOwnText = document.createElement('a');
+            createOwnText.href = 'index.html';
+            createOwnText.className = 'create-own';
+            createOwnText.textContent = 'Create your own FlyForm';
+            
             endContent.appendChild(checkmark);
             endContent.appendChild(endTitle);
             endContent.appendChild(endDescription);
+            endContent.appendChild(createOwnText);
             endScreen.appendChild(endContent);
             
             container.appendChild(endScreen);
@@ -968,6 +1236,11 @@ textarea.input {
                             
                             // Select this option
                             this.classList.add('selected');
+                            
+                            // Auto-advance after selection with a delay
+                            setTimeout(() => {
+                                navigateToNextSlide(question.id);
+                            }, 500);
                         };
                         
                         const optionTitle = document.createElement('h3');
@@ -1040,6 +1313,13 @@ textarea.input {
                         select.appendChild(optionElement);
                     });
                     
+                    select.addEventListener('change', () => {
+                        // Auto-advance after selection with a delay
+                        setTimeout(() => {
+                            navigateToNextSlide(question.id);
+                        }, 500);
+                    });
+                    
                     slide.appendChild(select);
                     break;
                     
@@ -1060,6 +1340,11 @@ textarea.input {
                             
                             // Select this rating
                             this.classList.add('selected');
+                            
+                            // Auto-advance after selection with a delay
+                            setTimeout(() => {
+                                navigateToNextSlide(question.id);
+                            }, 500);
                         };
                         
                         ratingGroup.appendChild(ratingBtn);
@@ -1189,103 +1474,105 @@ textarea.input {
             buttonContainer.appendChild(backButton);
             slide.appendChild(buttonContainer);
             
+            // Add scroll/swipe indicator if not the last question
+            if (index < formState?.formData?.questions.length - 1) {
+                const swipeIndicator = document.createElement('div');
+                swipeIndicator.className = 'scroll-indicator';
+                swipeIndicator.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14M5 12l7 7 7-7"/>
+                    </svg>
+                    <div class="scroll-indicator-text">Scroll or swipe to continue</div>
+                `;
+                slide.appendChild(swipeIndicator);
+            }
+            
             return slide;
         }
         
-        function navigateToNextSlide(currentId) {
+        function navigateToSlide(slideId) {
             if (!formFound) return;
             
             // Get the current slide
-            const currentSlide = document.getElementById(`slide-${currentId}`);
+            const currentSlide = document.querySelector('.slide.active');
+            const currentId = formState.currentSlide;
             
-            // Validate and collect answer if this is a question slide
-            if (currentId !== 'start' && currentId !== 'end') {
+            // If navigating to the same slide, do nothing
+            if (currentId === slideId) return;
+            
+            // If going to a question slide, validate current slide if needed
+            if (currentId !== 'start' && currentId !== 'end' && slideId !== 'start') {
                 const question = formState.formData.questions.find(q => q.id === currentId);
                 
-                // Validate required questions
-                if (question.required) {
-                    let answer = null;
-                    
-                    switch (question.type) {
-                        case 'text':
-                        case 'paragraph':
-                        case 'email':
-                        case 'url':
-                        case 'phone':
-                        case 'number':
-                        case 'date':
-                        case 'time':
-                        case 'location':
-                            answer = document.getElementById(`input-${question.id}`).value;
-                            break;
-                            
-                        case 'multiple_choice':
-                            const selectedOption = currentSlide.querySelector('.option.selected');
-                            if (selectedOption) {
-                                answer = selectedOption.dataset.value;
-                            }
-                            break;
-                            
-                        case 'checkbox':
-                            const selectedCheckboxes = currentSlide.querySelectorAll('.checkbox-option.selected');
-                            if (selectedCheckboxes.length > 0) {
-                                answer = Array.from(selectedCheckboxes).map(cb => cb.dataset.value);
-                            }
-                            break;
-                            
-                        case 'dropdown':
-                            answer = document.getElementById(`input-${question.id}`).value;
-                            break;
-                            
-                        case 'rating':
-                            const selectedRating = currentSlide.querySelector('.rating-btn.selected');
-                            if (selectedRating) {
-                                answer = selectedRating.dataset.value;
-                            }
-                            break;
-                            
-                        case 'scale':
-                            answer = currentSlide.querySelector('.scale-slider').value;
-                            break;
-                            
-                        case 'file':
-                            const fileInput = document.getElementById(`input-${question.id}`);
-                            if (fileInput.files.length > 0) {
-                                answer = 'Files selected'; // We can't actually upload files in this demo
-                            }
-                            break;
-                    }
-                    
-                    if (!answer) {
+                // Validate required questions if we're moving forward
+                if (question.required && getQuestionIndex(slideId) > getQuestionIndex(currentId)) {
+                    if (!validateQuestion(currentId)) {
                         // Show validation error with a shake animation
                         currentSlide.style.animation = 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both';
                         setTimeout(() => {
                             currentSlide.style.animation = '';
                         }, 500);
                         
-                        // Add shake animation if it doesn't exist
-                        if (!document.querySelector('style#shake-animation')) {
-                            const styleSheet = document.createElement('style');
-                            styleSheet.id = 'shake-animation';
-                            styleSheet.textContent = `
-                                @keyframes shake {
-                                    10%, 90% { transform: translate3d(-1px, 0, 0); }
-                                    20%, 80% { transform: translate3d(2px, 0, 0); }
-                                    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-                                    40%, 60% { transform: translate3d(4px, 0, 0); }
-                                }
-                            `;
-                            document.head.appendChild(styleSheet);
-                        }
-                        
                         alert('Please answer this question before continuing.');
                         return;
                     }
                 }
                 
-                // Collect the answer
+                // Collect the answer from current slide
                 collectAnswer(currentId);
             }
+            
+            // Add exit animation to current slide
+            currentSlide.classList.add('slide-transition-exit-active');
+            
+            // After a short delay, switch slides
+            setTimeout(() => {
+                // Remove both active and exit classes
+                currentSlide.classList.remove('active', 'slide-transition-exit-active');
+                
+                // Add enter class to next slide
+                const nextSlide = document.getElementById(`slide-${slideId}`);
+                nextSlide.classList.add('slide-transition-enter');
+                
+                // Trigger reflow to ensure enter class is applied
+                void nextSlide.offsetWidth;
+                
+                // Add active class to show the slide
+                nextSlide.classList.add('active', 'slide-transition-enter-active');
+                
+                // Remove enter animation classes after transition completes
+                setTimeout(() => {
+                    nextSlide.classList.remove('slide-transition-enter', 'slide-transition-enter-active');
+                }, 400);
+                
+                // Update current slide in state
+                formState.currentSlide = slideId;
+                
+                // Update progress bar
+                updateProgress();
+                
+                // Update scroll navigation
+                updateScrollNav();
+                
+                // Auto-focus first input in the new slide if present
+                const firstInput = nextSlide.querySelector('input, textarea, select');
+                if (firstInput) {
+                    setTimeout(() => {
+                        firstInput.focus();
+                    }, 400);
+                }
+            }, 300); // Match this delay with the CSS transition duration
+        }
+        
+        function getQuestionIndex(slideId) {
+            if (slideId === 'start') return -1;
+            if (slideId === 'end') return formState.formData.questions.length;
+            
+            return formState.formData.questions.findIndex(q => q.id === slideId);
+        }
+        
+        function navigateToNextSlide(currentId) {
+            if (!formFound) return;
             
             // Determine the next slide
             let nextId;
@@ -1298,13 +1585,21 @@ textarea.input {
                 resetForm();
                 return;
             } else {
+                // Validate required questions
+                if (!validateQuestion(currentId)) {
+                    return;
+                }
+                
                 // Find the current question index
                 const currentIndex = formState.formData.questions.findIndex(q => q.id === currentId);
                 
                 if (currentIndex === formState.formData.questions.length - 1) {
                     // If this is the last question, we need to submit the form
+                    // Get the current slide
+                    const currentSlide = document.getElementById(`slide-${currentId}`);
+                    
                     // Add exit animation to current slide
-                    currentSlide.classList.add('exit');
+                    currentSlide.classList.add('slide-transition-exit-active');
                     
                     // Show loading state
                     showLoading();
@@ -1313,30 +1608,33 @@ textarea.input {
                     setTimeout(() => {
                         submitForm().then(() => {
                             // Remove exit class and active class
-                            currentSlide.classList.remove('active', 'exit');
+                            currentSlide.classList.remove('active', 'slide-transition-exit-active');
                             
                             // Set next slide to end screen
                             nextId = 'end';
                             
                             // Show next slide with animation
                             const nextSlide = document.getElementById(`slide-${nextId}`);
-                            nextSlide.classList.add('enter');
+                            nextSlide.classList.add('slide-transition-enter');
                             
                             // Trigger reflow to ensure enter class is applied
                             void nextSlide.offsetWidth;
                             
-                            nextSlide.classList.add('active');
+                            nextSlide.classList.add('active', 'slide-transition-enter-active');
                             
                             // Remove enter class after animation completes
                             setTimeout(() => {
-                                nextSlide.classList.remove('enter');
-                            }, 50);
+                                nextSlide.classList.remove('slide-transition-enter', 'slide-transition-enter-active');
+                            }, 400);
                             
                             // Update current slide in state
                             formState.currentSlide = nextId;
                             
                             // Update progress bar
                             updateProgress();
+                            
+                            // Update scroll navigation
+                            updateScrollNav();
                             
                             // Hide loading
                             hideLoading();
@@ -1350,50 +1648,12 @@ textarea.input {
                 }
             }
             
-            // Add exit animation to current slide
-            currentSlide.classList.add('exit');
-            
-            // After a short delay, switch slides
-            setTimeout(() => {
-                // Remove both active and exit classes
-                currentSlide.classList.remove('active', 'exit');
-                
-                // Add enter class to next slide
-                const nextSlide = document.getElementById(`slide-${nextId}`);
-                nextSlide.classList.add('enter');
-                
-                // Trigger reflow to ensure enter class is applied
-                void nextSlide.offsetWidth;
-                
-                // Add active class to show the slide
-                nextSlide.classList.add('active');
-                
-                // Remove enter class after animation starts
-                setTimeout(() => {
-                    nextSlide.classList.remove('enter');
-                }, 50);
-                
-                // Update current slide in state
-                formState.currentSlide = nextId;
-                
-                // Update progress bar
-                updateProgress();
-                
-                // Auto-focus first input in the new slide if present
-                const firstInput = nextSlide.querySelector('input, textarea, select');
-                if (firstInput) {
-                    setTimeout(() => {
-                        firstInput.focus();
-                    }, 300);
-                }
-            }, 300); // Match this delay with the CSS transition duration
+            // Navigate to the next slide
+            navigateToSlide(nextId);
         }
         
         function navigateToPrevSlide(currentId, currentIndex) {
             if (!formFound) return;
-            
-            // Get the current slide
-            const currentSlide = document.getElementById(`slide-${currentId}`);
             
             // Determine the previous slide
             let prevId;
@@ -1406,44 +1666,85 @@ textarea.input {
                 prevId = formState.formData.questions[currentIndex - 1].id;
             }
             
-            // Add exit animation to current slide (moving upward)
-            currentSlide.style.transform = 'translateY(-30px)';
-            currentSlide.style.opacity = '0';
+            // Navigate to the previous slide
+            navigateToSlide(prevId);
+        }
+        
+        function validateQuestion(questionId) {
+            const question = formState.formData.questions.find(q => q.id === questionId);
             
-            // After a short delay, switch slides
-            setTimeout(() => {
-                // Reset transform and opacity
-                currentSlide.style.transform = '';
-                currentSlide.style.opacity = '';
-                
-                // Remove active class
-                currentSlide.classList.remove('active');
-                
-                // Add active class to previous slide with animation
-                const prevSlide = document.getElementById(`slide-${prevId}`);
-                prevSlide.style.transform = 'translateY(30px)';
-                prevSlide.style.opacity = '0';
-                prevSlide.classList.add('active');
-                
-                // Trigger reflow
-                void prevSlide.offsetWidth;
-                
-                // Animate in
-                prevSlide.style.transform = 'translateY(0)';
-                prevSlide.style.opacity = '1';
-                
-                // Reset styles after animation completes
-                setTimeout(() => {
-                    prevSlide.style.transform = '';
-                    prevSlide.style.opacity = '';
-                }, 300);
-                
-                // Update current slide in state
-                formState.currentSlide = prevId;
-                
-                // Update progress bar
-                updateProgress();
-            }, 250);
+            // If question is not required, no need to validate
+            if (!question.required) return true;
+            
+            const slide = document.getElementById(`slide-${questionId}`);
+            let answer = null;
+            
+            switch (question.type) {
+                case 'text':
+                case 'paragraph':
+                case 'email':
+                case 'url':
+                case 'phone':
+                case 'number':
+                case 'date':
+                case 'time':
+                case 'location':
+                    answer = document.getElementById(`input-${question.id}`).value;
+                    break;
+                    
+                case 'multiple_choice':
+                    const selectedOption = slide.querySelector('.option.selected');
+                    if (selectedOption) {
+                        answer = selectedOption.dataset.value;
+                    }
+                    break;
+                    
+                case 'checkbox':
+                    const selectedCheckboxes = slide.querySelectorAll('.checkbox-option.selected');
+                    if (selectedCheckboxes.length > 0) {
+                        answer = Array.from(selectedCheckboxes).map(cb => cb.dataset.value);
+                    }
+                    break;
+                    
+                case 'dropdown':
+                    answer = document.getElementById(`input-${question.id}`).value;
+                    break;
+                    
+                case 'rating':
+                    const selectedRating = slide.querySelector('.rating-btn.selected');
+                    if (selectedRating) {
+                        answer = selectedRating.dataset.value;
+                    }
+                    break;
+                    
+                case 'scale':
+                    answer = slide.querySelector('.scale-slider').value;
+                    break;
+                    
+                case 'file':
+                    const fileInput = document.getElementById(`input-${question.id}`);
+                    if (fileInput.files.length > 0) {
+                        answer = 'Files selected'; // We can't actually upload files in this demo
+                    }
+                    break;
+            }
+            
+            // Add shake animation if it doesn't exist
+            if (!document.querySelector('style#shake-animation')) {
+                const styleSheet = document.createElement('style');
+                styleSheet.id = 'shake-animation';
+                styleSheet.textContent = `
+                    @keyframes shake {
+                        10%, 90% { transform: translate3d(-1px, 0, 0); }
+                        20%, 80% { transform: translate3d(2px, 0, 0); }
+                        30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+                        40%, 60% { transform: translate3d(4px, 0, 0); }
+                    }
+                `;
+                document.head.appendChild(styleSheet);
+            }
+            
+            return !!answer;
         }
         
         function collectAnswer(questionId) {
@@ -1596,6 +1897,79 @@ textarea.input {
             
             // Update progress bar
             updateProgress();
+            
+            // Update scroll navigation
+            updateScrollNav();
+        }
+        
+        // Touch event handlers for swipe navigation
+        function handleTouchStart(event) {
+            touchStartY = event.touches[0].clientY;
+        }
+        
+        function handleTouchEnd(event) {
+            touchEndY = event.changedTouches[0].clientY;
+            handleSwipe();
+        }
+        
+        function handleSwipe() {
+            const swipeDistance = touchStartY - touchEndY;
+            const minSwipeDistance = 50; // Minimum distance required for a swipe
+            
+            if (Math.abs(swipeDistance) < minSwipeDistance) return;
+            
+            if (swipeDistance > 0) {
+                // Swiped up - go to next slide
+                navigateToNextSlide(formState.currentSlide);
+            } else {
+                // Swiped down - go to previous slide
+                const currentIndex = getQuestionIndex(formState.currentSlide);
+                navigateToPrevSlide(formState.currentSlide, currentIndex);
+            }
+        }
+        
+        // Scroll event handler for scroll-based navigation
+        function handleScroll(event) {
+            // Prevent default only if we're handling the scroll for navigation
+            if (!formFound || isLoading) return;
+            
+            // Clear previous timeout
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            
+            // Set a timeout to prevent multiple navigations
+            scrollTimeout = setTimeout(() => {
+                const direction = event.deltaY > 0 ? 'down' : 'up';
+                
+                if (direction === 'down') {
+                    // Scrolling down - go to next slide
+                    navigateToNextSlide(formState.currentSlide);
+                } else {
+                    // Scrolling up - go to previous slide
+                    const currentIndex = getQuestionIndex(formState.currentSlide);
+                    navigateToPrevSlide(formState.currentSlide, currentIndex);
+                }
+                
+                // Prevent default scrolling
+                event.preventDefault();
+            }, 200);
+        }
+        
+        // Keyboard navigation
+        function handleKeyNavigation(event) {
+            if (!formFound || isLoading) return;
+            
+            if (event.key === 'ArrowDown' || event.key === 'Enter') {
+                // Down arrow or Enter - go to next slide
+                navigateToNextSlide(formState.currentSlide);
+                event.preventDefault();
+            } else if (event.key === 'ArrowUp') {
+                // Up arrow - go to previous slide
+                const currentIndex = getQuestionIndex(formState.currentSlide);
+                navigateToPrevSlide(formState.currentSlide, currentIndex);
+                event.preventDefault();
+            }
         }
     </script>
 </body>
