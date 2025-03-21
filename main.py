@@ -44,10 +44,15 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Connect to MongoDB
+# Connect to MongoDB - async client for motor operations
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URL)
 db = client[DATABASE_NAME]
-fs = gridfs.GridFS(client[DATABASE_NAME])
+
+# Create a regular pymongo client for GridFS
+# This is the fix - GridFS needs a regular pymongo database, not an async one
+pymongo_client = pymongo.MongoClient(MONGODB_URL)
+pymongo_db = pymongo_client[DATABASE_NAME]
+fs = gridfs.GridFS(pymongo_db)
 
 # Collections
 users_collection = db.users
