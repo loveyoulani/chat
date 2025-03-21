@@ -104,7 +104,7 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v):
+    def validate(cls, v, info=None):  # Add the info parameter with default None
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
@@ -114,8 +114,7 @@ class PyObjectId(ObjectId):
         from pydantic_core import core_schema
         return core_schema.with_info_plain_validator_function(
             cls.validate,
-            serialization=core_schema.to_string_ser_schema(),
-            # Remove the 'type' parameter
+            serialization=core_schema.to_string_ser_schema()
         )
 
 class UserBase(BaseModel):
