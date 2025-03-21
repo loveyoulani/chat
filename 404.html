@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form - FlyForms</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #fff;
+            color: #000;
+            min-height: 100vh;
+            width: 100%;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        .progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #eee;
+            z-index: 100;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background: #000;
+            transition: width 0.5s ease;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .logo {
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            font-weight: 500;
+            font-size: 20px;
+        }
+        
+        .branding {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            z-index: 10;
+        }
+        
+        .branding a {
+            color: #555;
+            text-decoration: none;
+        }
+        
+        .branding a:hover {
+            text-decoration: underline;
+        }
+        
+        .slide {
+            display: none;
+            padding-top: 120px;
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .slide.active {
+            display: block;
+        }
+        
+        h1 {
+            font-size: 32px;
+            font-weight: 300;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        p {
+            font-size: 16px;
+            font-weight: 300;
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        
+        .input {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            margin-bottom: 30px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .input:focus {
+            outline: none;
+            border-color: #000;
+        }
+        
+        textarea.input {
+            min-height: 120px;
+            resize: none;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: #000;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+        }
+        
+        .btn:hover {
+            background: #333;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-back {
+            background: transparent;
+            color: #666;
+            border: 1px solid #ddd;
+            margin-top: 15px;
+        }
+        
+        .btn-back:hover {
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .rating-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .rating-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 1px solid #ddd;
+            background: transparent;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .rating-btn:hover {
+            border-color: #999;
+            background: #f9f9f9;
+        }
+        
+        .rating-btn.selected {
+            background: #000;
+            color: #fff;
+            border-color: #000;
+        }
+        
+        .options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .option {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s ease;
+        }
+        
+        .option:hover {
+            border-color: #999;
+            background: #f9f9f9;
+        }
+        
+        .option.selected {
+            border-color: #000;
+            background: #f9f9f9;
+        }
+        
+        .option h3 {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        
+        .option p {
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+        
+        .checkbox-option {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-option:hover {
+            border-color: #999;
+            background: #f9f9f9;
+        }
+        
+        .checkbox-option.selected {
+            border-color: #000;
+            background: #f9f9f9;
+        }
+        
+        .checkbox-option input {
+            margin-right: 10px;
+            margin-top: 3px;
+        }
+        
+        .checkbox-option label {
+            flex: 1;
+            cursor: pointer;
+        }
+        
+        .success {
+            text-align: center;
+            padding-top: 60px;
+        }
+        
+        .checkmark {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 30px;
+        }
+        
+        .checkmark svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding-top: 60px;
+        }
+        
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 30px;
+            color: #e74c3c;
+        }
+        
+        .error-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #000;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 480px) {
+            .options {
+                grid-template-columns: 1fr;
+            }
+            
+            .logo {
+                font-size: 18px;
+                top: 30px;
+            }
+            
+            .slide {
+                padding-top: 100px;
+            }
+            
+            h1 {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="progress">
+        <div class="progress-bar" id="progress"></div>
+    </div>
+    
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+    
+    <div class="container" id="form-container">
+        <div class="logo" id="form-logo">FlyForms</div>
+        
+        <!-- Error State -->
+        <div class="slide active" id="error-slide">
+            <div class="error-state">
+                <div class="error-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                </div>
+                <h1>Form Not Found</h1>
+                <p>The form you're looking for doesn't exist or has been removed.</p>
+                <a href="index.html" class="btn">Go to Homepage</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="branding">
+        Made with <a href="index.html">FlyForms</a>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script>
+        // Extract the form ID from the URL path
+        const path = window.location.pathname;
+        const formSlug = path.substring(path.lastIndexOf('/') + 1);
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadForm(formSlug);
+        });
+        
+        async function loadForm(slug) {
+            try {
+                // Fetch form data from the API
+                const response = await fetch(`${API_URL}/f/${slug}`);
+                
+                if (!response.ok) {
+                    // Show error state if form not found
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+                
+                const formData = await response.json();
+                
+                // Clear error slide
+                document.getElementById('error-slide').classList.remove('active');
+                document.getElementById('form-container').innerHTML = '';
+                
+                // Set form title in the document title
+                document.title = formData.title + ' - FlyForms';
+                
+                // Create form container
+                const container = document.getElementById('form-container');
+                
+                // Add logo if specified, otherwise use default
+                const logoElement = document.createElement('div');
+                logoElement.className = 'logo';
+                logoElement.textContent = formData.logo || 'FlyForms';
+                container.appendChild(logoElement);
+                
+                // Create progress bar
+                const progressContainer = document.createElement('div');
+                progressContainer.className = 'progress';
+                const progressBar = document.createElement('div');
+                progressBar.className = 'progress-bar';
+                progressBar.id = 'progress';
+                progressContainer.appendChild(progressBar);
+                document.body.insertBefore(progressContainer, document.body.firstChild);
+                
+                // Create start screen
+                const startScreen = document.createElement('div');
+                startScreen.className = 'slide active';
+                startScreen.id = 'slide-start';
+                
+                const startTitle = document.createElement('h1');
+                startTitle.textContent = formData.start_screen.title;
+                
+                const startDescription = document.createElement('p');
+                startDescription.textContent = formData.start_screen.description || '';
+                
+                const startButton = document.createElement('button');
+                startButton.className = 'btn';
+                startButton.textContent = 'Get Started';
+                startButton.onclick = () => navigateToNextSlide('start');
+                
+                startScreen.appendChild(startTitle);
+                startScreen.appendChild(startDescription);
+                startScreen.appendChild(startButton);
+                
+                container.appendChild(startScreen);
+                
+                // Create question slides
+                formData.questions.forEach((question, index) => {
+                    const questionSlide = createQuestionSlide(question, index);
+                    container.appendChild(questionSlide);
+                });
+                
+                // Create end screen
+                const endScreen = document.createElement('div');
+                endScreen.className = 'slide';
+                endScreen.id = 'slide-end';
+                
+                const endContent = document.createElement('div');
+                endContent.className = 'success';
+                
+                const checkmark = document.createElement('div');
+                checkmark.className = 'checkmark';
+                checkmark.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle cx="26" cy="26" r="25" fill="none" stroke="#000" stroke-width="2"/>
+                        <path fill="none" stroke="#000" stroke-width="2" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                    </svg>
+                `;
+                
+                const endTitle = document.createElement('h1');
+                endTitle.textContent = formData.end_screen.title;
+                
+                const endDescription = document.createElement('p');
+                endDescription.textContent = formData.end_screen.description || '';
+                
+                endContent.appendChild(checkmark);
+                endContent.appendChild(endTitle);
+                endContent.appendChild(endDescription);
+                endScreen.appendChild(endContent);
+                
+                container.appendChild(endScreen);
+                
+                // Add branding footer
+                const branding = document.createElement('div');
+                branding.className = 'branding';
+                branding.innerHTML = 'Made with <a href="index.html">FlyForms</a>';
+                document.body.appendChild(branding);
+                
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
+                
+                // Apply custom CSS if provided
+                if (formData.theme && formData.theme.custom_css) {
+                    const customStyle = document.createElement('style');
+                    customStyle.textContent = formData.theme.custom_css;
+                    document.head.appendChild(customStyle);
+                }
+                
+                // Initialize form state
+                window.formState = {
+                    currentSlide: 'start',
+                    totalSlides: formData.questions.length + 2, // start + questions + end
+                    answers: {},
+                    formData: formData
+                };
+                
+                // Update progress bar
+                updateProgress();
+                
+            } catch (error) {
+                console.error('Error loading form:', error);
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        function createQuestionSlide(question, index) {
+            const slide = document.createElement('div');
+            slide.className = 'slide';
+            slide.id = `slide-${question.id}`;
+            
+            const title = document.createElement('h1');
+            title.textContent = question.title;
+            slide.appendChild(title);
+            
+            if (question.description) {
+                const description = document.createElement('p');
+                description.textContent = question.description;
+                slide.appendChild(description);
+            }
+            
+            // Create different input types based on question type
+            switch (question.type) {
+                case 'text':
+                case 'paragraph':
+                case 'email':
+                case 'url':
+                case 'phone':
+                case 'number':
+                    const input = document.createElement(question.type === 'paragraph' ? 'textarea' : 'input');
+                    input.className = 'input';
+                    input.id = `input-${question.id}`;
+                    input.placeholder = question.placeholder || `Enter your ${question.type === 'paragraph' ? 'answer' : question.type}`;
+                    
+                    if (question.type === 'email') {
+                        input.type = 'email';
+                    } else if (question.type === 'url') {
+                        input.type = 'url';
+                    } else if (question.type === 'phone') {
+                        input.type = 'tel';
+                    } else if (question.type === 'number') {
+                        input.type = 'number';
+                        if (question.min_value !== undefined) input.min = question.min_value;
+                        if (question.max_value !== undefined) input.max = question.max_value;
+                    } else if (question.type !== 'paragraph') {
+                        input.type = 'text';
+                    }
+                    
+                    slide.appendChild(input);
+                    break;
+                    
+                case 'multiple_choice':
+                    const options = document.createElement('div');
+                    options.className = 'options';
+                    
+                    question.options.forEach(option => {
+                        const optionElement = document.createElement('div');
+                        optionElement.className = 'option';
+                        optionElement.dataset.value = option.value;
+                        optionElement.onclick = function() {
+                            // Deselect all other options
+                            const allOptions = this.parentNode.querySelectorAll('.option');
+                            allOptions.forEach(opt => opt.classList.remove('selected'));
+                            
+                            // Select this option
+                            this.classList.add('selected');
+                        };
+                        
+                        const optionTitle = document.createElement('h3');
+                        optionTitle.textContent = option.label;
+                        optionElement.appendChild(optionTitle);
+                        
+                        if (option.description) {
+                            const optionDesc = document.createElement('p');
+                            optionDesc.textContent = option.description;
+                            optionElement.appendChild(optionDesc);
+                        }
+                        
+                        options.appendChild(optionElement);
+                    });
+                    
+                    slide.appendChild(options);
+                    break;
+                    
+                case 'checkbox':
+                    const checkboxes = document.createElement('div');
+                    checkboxes.className = 'checkbox-list';
+                    
+                    question.options.forEach(option => {
+                        const checkboxOption = document.createElement('div');
+                        checkboxOption.className = 'checkbox-option';
+                        checkboxOption.dataset.value = option.value;
+                        checkboxOption.onclick = function() {
+                            this.classList.toggle('selected');
+                            const checkbox = this.querySelector('input[type="checkbox"]');
+                            checkbox.checked = !checkbox.checked;
+                        };
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.value = option.value;
+                        checkbox.id = `checkbox-${question.id}-${option.value}`;
+                        checkbox.onclick = (e) => e.stopPropagation();
+                        
+                        const label = document.createElement('label');
+                        label.textContent = option.label;
+                        label.htmlFor = checkbox.id;
+                        
+                        checkboxOption.appendChild(checkbox);
+                        checkboxOption.appendChild(label);
+                        checkboxes.appendChild(checkboxOption);
+                    });
+                    
+                    slide.appendChild(checkboxes);
+                    break;
+                    
+                case 'dropdown':
+                    const select = document.createElement('select');
+                    select.className = 'input';
+                    select.id = `input-${question.id}`;
+                    
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Select an option';
+                    defaultOption.selected = true;
+                    defaultOption.disabled = true;
+                    select.appendChild(defaultOption);
+                    
+                    question.options.forEach(option => {
+                        const optionElement = document.createElement('option');
+                        optionElement.value = option.value;
+                        optionElement.textContent = option.label;
+                        select.appendChild(optionElement);
+                    });
+                    
+                    slide.appendChild(select);
+                    break;
+                    
+                case 'rating':
+                    const ratingGroup = document.createElement('div');
+                    ratingGroup.className = 'rating-group';
+                    
+                    const maxRating = question.max_value || 5;
+                    for (let i = 1; i <= maxRating; i++) {
+                        const ratingBtn = document.createElement('button');
+                        ratingBtn.className = 'rating-btn';
+                        ratingBtn.textContent = i;
+                        ratingBtn.dataset.value = i;
+                        ratingBtn.onclick = function() {
+                            // Deselect all rating buttons
+                            const allRatings = this.parentNode.querySelectorAll('.rating-btn');
+                            allRatings.forEach(btn => btn.classList.remove('selected'));
+                            
+                            // Select this rating
+                            this.classList.add('selected');
+                        };
+                        
+                        ratingGroup.appendChild(ratingBtn);
+                    }
+                    
+                    slide.appendChild(ratingGroup);
+                    break;
+                    
+                case 'scale':
+                    const scaleContainer = document.createElement('div');
+                    scaleContainer.className = 'scale-container';
+                    
+                    const minValue = question.min_value || 0;
+                    const maxValue = question.max_value || 10;
+                    
+                    const slider = document.createElement('input');
+                    slider.type = 'range';
+                    slider.className = 'scale-slider';
+                    slider.min = minValue;
+                    slider.max = maxValue;
+                    slider.value = Math.floor((maxValue - minValue) / 2) + minValue;
+                    
+                    const scaleValue = document.createElement('div');
+                    scaleValue.className = 'scale-value';
+                    scaleValue.textContent = slider.value;
+                    
+                    slider.oninput = function() {
+                        scaleValue.textContent = this.value;
+                    };
+                    
+                    scaleContainer.appendChild(slider);
+                    scaleContainer.appendChild(scaleValue);
+                    slide.appendChild(scaleContainer);
+                    break;
+                    
+                case 'date':
+                    const dateInput = document.createElement('input');
+                    dateInput.type = 'date';
+                    dateInput.className = 'input';
+                    dateInput.id = `input-${question.id}`;
+                    slide.appendChild(dateInput);
+                    break;
+                    
+                case 'time':
+                    const timeInput = document.createElement('input');
+                    timeInput.type = 'time';
+                    timeInput.className = 'input';
+                    timeInput.id = `input-${question.id}`;
+                    slide.appendChild(timeInput);
+                    break;
+                    
+                case 'file':
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.className = 'input file-input';
+                    fileInput.id = `input-${question.id}`;
+                    
+                    if (question.accept) {
+                        fileInput.accept = question.accept;
+                    }
+                    
+                    if (question.multiple) {
+                        fileInput.multiple = true;
+                    }
+                    
+                    slide.appendChild(fileInput);
+                    break;
+                    
+                case 'location':
+                    const locationInput = document.createElement('input');
+                    locationInput.type = 'text';
+                    locationInput.className = 'input';
+                    locationInput.id = `input-${question.id}`;
+                    locationInput.placeholder = 'Enter your location';
+                    
+                    const locationButton = document.createElement('button');
+                    locationButton.className = 'btn btn-outline location-btn';
+                    locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Use Current Location';
+                    locationButton.onclick = function(e) {
+                        e.preventDefault();
+                        if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(position => {
+                                const latitude = position.coords.latitude;
+                                const longitude = position.coords.longitude;
+                                locationInput.value = `${latitude}, ${longitude}`;
+                            }, () => {
+                                alert('Unable to retrieve your location');
+                            });
+                        } else {
+                            alert('Geolocation is not supported by your browser');
+                        }
+                    };
+                    
+                    slide.appendChild(locationInput);
+                    slide.appendChild(locationButton);
+                    break;
+            }
+            
+            // Add navigation buttons
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'button-container';
+            
+            const nextButton = document.createElement('button');
+            nextButton.className = 'btn';
+            nextButton.textContent = index === window.formState?.formData.questions.length - 1 ? 'Submit' : 'Continue';
+            nextButton.onclick = () => navigateToNextSlide(question.id);
+            
+            const backButton = document.createElement('button');
+            backButton.className = 'btn btn-back';
+            backButton.textContent = 'Back';
+            backButton.onclick = () => navigateToPrevSlide(question.id, index);
+            
+            buttonContainer.appendChild(nextButton);
+            buttonContainer.appendChild(backButton);
+            slide.appendChild(buttonContainer);
+            
+            return slide;
+        }
+        
+        function navigateToNextSlide(currentId) {
+            // Get the current slide
+            const currentSlide = document.getElementById(`slide-${currentId}`);
+            
+            // Validate and collect answer if this is a question slide
+            if (currentId !== 'start' && currentId !== 'end') {
+                const question = window.formState.formData.questions.find(q => q.id === currentId);
+                
+                // Validate required questions
+                if (question.required) {
+                    let answer = null;
+                    
+                    switch (question.type) {
+                        case 'text':
+                        case 'paragraph':
+                        case 'email':
+                        case 'url':
+                        case 'phone':
+                        case 'number':
+                        case 'date':
+                        case 'time':
+                        case 'location':
+                            answer = document.getElementById(`input-${question.id}`).value;
+                            break;
+                            
+                        case 'multiple_choice':
+                            const selectedOption = currentSlide.querySelector('.option.selected');
+                            if (selectedOption) {
+                                answer = selectedOption.dataset.value;
+                            }
+                            break;
+                            
+                        case 'checkbox':
+                            const selectedCheckboxes = currentSlide.querySelectorAll('.checkbox-option.selected');
+                            if (selectedCheckboxes.length > 0) {
+                                answer = Array.from(selectedCheckboxes).map(cb => cb.dataset.value);
+                            }
+                            break;
+                            
+                        case 'dropdown':
+                            answer = document.getElementById(`input-${question.id}`).value;
+                            break;
+                            
+                        case 'rating':
+                            const selectedRating = currentSlide.querySelector('.rating-btn.selected');
+                            if (selectedRating) {
+                                answer = selectedRating.dataset.value;
+                            }
+                            break;
+                            
+                        case 'scale':
+                            answer = currentSlide.querySelector('.scale-slider').value;
+                            break;
+                            
+                        case 'file':
+                            const fileInput = document.getElementById(`input-${question.id}`);
+                            if (fileInput.files.length > 0) {
+                                answer = 'Files selected'; // We can't actually upload files in this demo
+                            }
+                            break;
+                    }
+                    
+                    if (!answer) {
+                        alert('Please answer this question before continuing.');
+                        return;
+                    }
+                }
+                
+                // Collect the answer
+                collectAnswer(currentId);
+            }
+            
+            // Determine the next slide
+            let nextId;
+            
+            if (currentId === 'start') {
+                // If we're on the start screen, go to the first question
+                nextId = window.formState.formData.questions[0].id;
+            } else if (currentId === 'end') {
+                // If we're on the end screen, reset the form
+                resetForm();
+                return;
+            } else {
+                // Find the current question index
+                const currentIndex = window.formState.formData.questions.findIndex(q => q.id === currentId);
+                
+                if (currentIndex === window.formState.formData.questions.length - 1) {
+                    // If this is the last question, submit the form and go to end screen
+                    submitForm();
+                    nextId = 'end';
+                } else {
+                    // Otherwise go to the next question
+                    nextId = window.formState.formData.questions[currentIndex + 1].id;
+                }
+            }
+            
+            // Hide current slide
+            currentSlide.classList.remove('active');
+            
+            // Show next slide with animation
+            const nextSlide = document.getElementById(`slide-${nextId}`);
+            nextSlide.classList.add('active');
+            
+            // Update current slide in state
+            window.formState.currentSlide = nextId;
+            
+            // Update progress bar
+            updateProgress();
+        }
+        
+        function navigateToPrevSlide(currentId, currentIndex) {
+            // Get the current slide
+            const currentSlide = document.getElementById(`slide-${currentId}`);
+            
+            // Determine the previous slide
+            let prevId;
+            
+            if (currentIndex === 0) {
+                // If we're on the first question, go back to start screen
+                prevId = 'start';
+            } else {
+                // Otherwise go to the previous question
+                prevId = window.formState.formData.questions[currentIndex - 1].id;
+            }
+            
+            // Hide current slide
+            currentSlide.classList.remove('active');
+            
+            // Show previous slide with animation
+            const prevSlide = document.getElementById(`slide-${prevId}`);
+            prevSlide.classList.add('active');
+            
+            // Update current slide in state
+            window.formState.currentSlide = prevId;
+            
+            // Update progress bar
+            updateProgress();
+        }
+        
+        function collectAnswer(questionId) {
+            const question = window.formState.formData.questions.find(q => q.id === questionId);
+            const slide = document.getElementById(`slide-${questionId}`);
+            let answer;
+            
+            switch (question.type) {
+                case 'text':
+                case 'paragraph':
+                case 'email':
+                case 'url':
+                case 'phone':
+                case 'number':
+                case 'date':
+                case 'time':
+                case 'location':
+                    answer = document.getElementById(`input-${question.id}`).value;
+                    break;
+                    
+                case 'multiple_choice':
+                    const selectedOption = slide.querySelector('.option.selected');
+                    if (selectedOption) {
+                        answer = selectedOption.dataset.value;
+                    }
+                    break;
+                    
+                case 'checkbox':
+                    const selectedCheckboxes = slide.querySelectorAll('.checkbox-option.selected');
+                    if (selectedCheckboxes.length > 0) {
+                        answer = Array.from(selectedCheckboxes).map(cb => cb.dataset.value);
+                    }
+                    break;
+                    
+                case 'dropdown':
+                    answer = document.getElementById(`input-${question.id}`).value;
+                    break;
+                    
+                case 'rating':
+                    const selectedRating = slide.querySelector('.rating-btn.selected');
+                    if (selectedRating) {
+                        answer = selectedRating.dataset.value;
+                    }
+                    break;
+                    
+                case 'scale':
+                    answer = slide.querySelector('.scale-slider').value;
+                    break;
+                    
+                case 'file':
+                    // In a real app, we would handle file uploads here
+                    answer = 'File upload placeholder';
+                    break;
+            }
+            
+            if (answer !== undefined) {
+                window.formState.answers[questionId] = answer;
+            }
+        }
+        
+        async function submitForm() {
+            try {
+                // Show loading spinner
+                document.getElementById('loading').style.display = 'flex';
+                
+                // Submit answers to the API
+                const response = await fetch(`${API_URL}/f/${formSlug}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(window.formState.answers)
+                });
+                
+                const result = await response.json();
+                
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
+                
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to submit form');
+                }
+                
+                // Check if there's dynamic content for the end screen
+                if (result.end_screen && result.end_screen.dynamic_content) {
+                    // Update end screen with dynamic content
+                    const endScreen = document.getElementById('slide-end');
+                    const endTitle = endScreen.querySelector('h1');
+                    const endDescription = endScreen.querySelector('p');
+                    
+                    endTitle.textContent = result.end_screen.title || window.formState.formData.end_screen.title;
+                    endDescription.textContent = result.end_screen.description || window.formState.formData.end_screen.description;
+                }
+                
+                console.log('Form submitted successfully:', result);
+                
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
+                
+                // Show error message
+                alert('There was an error submitting your form. Please try again.');
+            }
+        }
+        
+        function updateProgress() {
+            if (!window.formState) return;
+            
+            let currentIndex;
+            
+            if (window.formState.currentSlide === 'start') {
+                currentIndex = 0;
+            } else if (window.formState.currentSlide === 'end') {
+                currentIndex = window.formState.totalSlides - 1;
+            } else {
+                // Find the index of the current question
+                const questionIndex = window.formState.formData.questions.findIndex(q => q.id === window.formState.currentSlide);
+                currentIndex = questionIndex + 1; // +1 because we have the start screen before questions
+            }
+            
+            const percent = (currentIndex / (window.formState.totalSlides - 1)) * 100;
+            document.getElementById('progress').style.width = percent + '%';
+        }
+        
+        function resetForm() {
+            // Clear all answers
+            window.formState.answers = {};
+            
+            // Reset to start screen
+            const currentSlide = document.querySelector('.slide.active');
+            currentSlide.classList.remove('active');
+            
+            const startSlide = document.getElementById('slide-start');
+            startSlide.classList.add('active');
+            
+            window.formState.currentSlide = 'start';
+            
+            // Reset all inputs
+            document.querySelectorAll('.input').forEach(input => {
+                input.value = '';
+            });
+            
+            document.querySelectorAll('.option.selected, .checkbox-option.selected, .rating-btn.selected').forEach(selected => {
+                selected.classList.remove('selected');
+            });
+            
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // Update progress bar
+            updateProgress();
+        }
+    </script>
+</body>
+</html>
