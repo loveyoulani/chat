@@ -2,8 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends, status, Request, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, EmailStr, Field, validator
+from typing import List, Optional, Dict, Any, Union, Annotated, ClassVar
+from pydantic import BaseModel, EmailStr, Field, validator, ConfigDict
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -15,6 +15,8 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 import time
+import asyncio
+import httpx
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -101,12 +103,18 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_json_schema__(cls, _schema_generator, _field_schema):
+        return {"type": "string"}
 
 class UserBase(BaseModel):
     email: EmailStr
     username: str
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class UserCreate(UserBase):
     password: str
@@ -114,11 +122,6 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     created_at: datetime = Field(default_factory=datetime.now)
-    
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 class Token(BaseModel):
     access_token: str
@@ -131,19 +134,43 @@ class Option(BaseModel):
     value: str
     label: str
     
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
 class Condition(BaseModel):
     question_id: str
     operator: str  # equals, not_equals, contains, not_contains, etc.
     value: Any
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Action(BaseModel):
     type: str  # show, hide, jump_to, end_form, etc.
     target_id: Optional[str] = None
     value: Optional[Any] = None
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Logic(BaseModel):
     condition: Condition
     action: Action
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Question(BaseModel):
     id: str
@@ -157,6 +184,12 @@ class Question(BaseModel):
     validation: Optional[Dict[str, Any]] = None
     logic: Optional[List[Logic]] = None
     
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
 class Screen(BaseModel):
     id: str
     title: str
@@ -164,6 +197,12 @@ class Screen(BaseModel):
     background_image: Optional[str] = None
     custom_css: Optional[str] = None
     custom_html: Optional[str] = None
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class EndScreen(BaseModel):
     id: str
@@ -173,6 +212,12 @@ class EndScreen(BaseModel):
     custom_css: Optional[str] = None
     custom_html: Optional[str] = None
     dynamic_content: Optional[Dict[str, Dict[str, Any]]] = None  # Question ID -> {condition -> content}
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class FormCreate(BaseModel):
     title: str
@@ -185,6 +230,12 @@ class FormCreate(BaseModel):
     custom_slug: Optional[str] = None
     theme: Optional[Dict[str, Any]] = None
     
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
 class Form(FormCreate):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     creator_id: PyObjectId
@@ -193,11 +244,6 @@ class Form(FormCreate):
     slug: str
     is_active: bool = True
     response_count: int = 0
-    
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 class FormResponse(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -207,10 +253,11 @@ class FormResponse(BaseModel):
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 class Template(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -220,10 +267,11 @@ class Template(BaseModel):
     form_data: Dict[str, Any]
     category: str
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
