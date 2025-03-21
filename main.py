@@ -1,81 +1,106 @@
-# main.py
-import os
-import secrets
-import time
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Dict, List, Optional, Union, Any
-
-import motor.motor_asyncio
-import gridfs
-from fastapi import FastAPI, HTTPException, Depends, status, Request, Form, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, Request, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel, Field, EmailStr
-from fastapi.staticfiles import StaticFiles
+from typing import List, Optional, Dict, Any, Union
+from datetime import datetime, timedelta
+from bson import ObjectId
+import motor.motor_asyncio
+import pymongo
+import gridfs
+import jwt
+import os
+import secrets
+import hashlib
+import time
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import uuid
-import base64
-from bson import ObjectId
-from bson.errors import InvalidId
-import logging
-from pymongo import ReturnDocument
-import re
-from fastapi.middleware.gzip import GZipMiddleware
+from passlib.context import CryptContext
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-jwt")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "formbuilder")
 
-# Initialize the FastAPI app
-app = FastAPI(title="Form Builder API", 
-              description="API for creating and managing custom forms",
-              version="1.0.0")
+# Initialize FastAPI app
+app = FastAPI(title="Form Builder API", description="API for creating and managing forms")
 
-# Add CORS middleware
+# Set up CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For production, specify actual origins
+    allow_origins=["*"],  # For production, specify exact domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Add GZip compression
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-# Rate limiting setup
+# Set up rate limiting
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# JWT Configuration
-SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_urlsafe(32)
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+# Connect to MongoDB
+client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URL)
+db = client[DATABASE_NAME]
+fs = gridfs.GridFS(client[DATABASE_NAME])
+
+# Collections
+users_collection = db.users
+forms_collection = db.forms
+responses_collection = db.responses
+templates_collection = db.templates
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# OAuth2 setup
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# MongoDB setup
-MONGODB_URL = os.environ.get("MONGODB_URL", "mongodb://localhost:27017")
-client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URL)
-db = client.get_database("formbuilder")  # Use get_database to properly initialize the database
-fs = gridfs.GridFS(db)  # Now pass the properly initialized database
+# Models
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+        
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(v)
+    
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
 
-# Database collections
-users_collection = db.users
-forms_collection = db.forms
-submissions_collection = db.submissions
-templates_collection = db.templates
+class UserBase(BaseModel):
+    email: EmailStr
+    username: str
+    
+class UserCreate(UserBase):
+    password: str
+    
+class UserInDB(UserBase):
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    hashed_password: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
-# Pydantic models for data validation
+class User(UserBase):
+    id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    
+    class Config:
+        orm_mode = True
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -83,197 +108,85 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
-class SpamPreventionLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    VERY_HIGH = "very_high"
-
-class QuestionType(str, Enum):
-    TEXT = "text"
-    TEXTAREA = "textarea"
-    NUMBER = "number"
-    SELECT = "select"
-    MULTI_SELECT = "multi_select"
-    CHECKBOX = "checkbox"
-    RADIO = "radio"
-    DATE = "date"
-    TIME = "time"
-    FILE = "file"
-    LOCATION = "location"
-    EMAIL = "email"
-    PHONE = "phone"
-    URL = "url"
-    RATING = "rating"
-    SLIDER = "slider"
-
-class Option(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    value: str
-    label: str
-    image_url: Optional[str] = None
-
-class ConditionalLogic(BaseModel):
-    question_id: str
-    operator: str  # equals, not_equals, contains, etc.
-    value: Any
-    action: str  # show, hide, skip_to, etc.
-    target_id: Optional[str] = None  # Used for skip_to
-
-class Question(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: QuestionType
-    title: str
-    description: Optional[str] = None
+class QuestionBase(BaseModel):
+    question_type: str  # text, number, multiple_choice, checkbox, dropdown, location, etc.
+    question_text: str
     required: bool = False
-    options: Optional[List[Option]] = None
-    min_value: Optional[int] = None
-    max_value: Optional[int] = None
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
+    options: Optional[List[str]] = None
+    max_selections: Optional[int] = None
+    min_selections: Optional[int] = None
     placeholder: Optional[str] = None
-    default_value: Optional[Any] = None
-    validation_regex: Optional[str] = None
-    validation_message: Optional[str] = None
-    conditional_logic: Optional[List[ConditionalLogic]] = None
-    image_url: Optional[str] = None
+    validation: Optional[Dict[str, Any]] = None
 
-class ScreenContent(BaseModel):
+class Question(QuestionBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+class FormStyle(BaseModel):
+    background_color: Optional[str] = None
+    text_color: Optional[str] = None
+    button_color: Optional[str] = None
+    font_family: Optional[str] = None
+    custom_css: Optional[str] = None
+    header_image: Optional[str] = None  # GridFS file ID
+
+class FormScreenBase(BaseModel):
     title: str
     description: Optional[str] = None
-    image_url: Optional[str] = None
-    html_content: Optional[str] = None
-    css_content: Optional[str] = None
+    background_image: Optional[str] = None  # GridFS file ID
+    custom_html: Optional[str] = None
 
-class EndScreenType(str, Enum):
-    STATIC = "static"
-    DYNAMIC = "dynamic"
+class StartScreen(FormScreenBase):
+    pass
 
-class EndScreenCondition(BaseModel):
-    question_id: str
-    operator: str
-    value: Any
-    content: ScreenContent
+class EndScreen(FormScreenBase):
+    conditional_content: Optional[Dict[str, Any]] = None  # Conditions for different end screens
 
-class FormSettings(BaseModel):
-    require_login: bool = False
-    limit_responses: Optional[int] = None
-    spam_prevention_level: SpamPreventionLevel = SpamPreventionLevel.MEDIUM
-    allow_multiple_submissions: bool = True
-    expiration_date: Optional[datetime] = None
-    custom_success_redirect: Optional[str] = None
-    custom_domain: Optional[str] = None
-    analytics_enabled: bool = True
-    notification_emails: Optional[List[str]] = None
-
-class Form(BaseModel):
-    id: Optional[str] = None
-    user_id: str
+class FormBase(BaseModel):
     title: str
     description: Optional[str] = None
-    start_screen: ScreenContent
+    is_public: bool = True
+    max_responses: Optional[int] = None
+    expiry_date: Optional[datetime] = None
+    start_screen: StartScreen
     questions: List[Question]
-    end_screen: Union[ScreenContent, List[EndScreenCondition]]
-    end_screen_type: EndScreenType = EndScreenType.STATIC
-    settings: FormSettings
-    is_template: bool = False
+    end_screen: EndScreen
+    style: Optional[FormStyle] = None
+    
+class FormCreate(FormBase):
+    pass
+
+class Form(FormBase):
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    creator_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    response_count: int = 0
     
     class Config:
-        schema_extra = {
-            "example": {
-                "title": "Customer Feedback Form",
-                "description": "Help us improve our services",
-                "start_screen": {
-                    "title": "Customer Feedback",
-                    "description": "We value your feedback. Please take a moment to fill out this survey."
-                },
-                "questions": [
-                    {
-                        "type": "text",
-                        "title": "What is your name?",
-                        "required": True,
-                        "placeholder": "John Doe"
-                    },
-                    {
-                        "type": "email",
-                        "title": "Email address",
-                        "required": True
-                    },
-                    {
-                        "type": "multi_select",
-                        "title": "What features do you value most?",
-                        "description": "Select up to three options",
-                        "required": True,
-                        "options": [
-                            {"value": "1", "label": "Ease of use"},
-                            {"value": "2", "label": "Performance"},
-                            {"value": "3", "label": "Design"},
-                            {"value": "4", "label": "Customer support"}
-                        ],
-                        "max_value": 3
-                    }
-                ],
-                "end_screen": {
-                    "title": "Thank You!",
-                    "description": "Your feedback has been submitted."
-                },
-                "end_screen_type": "static",
-                "settings": {
-                    "require_login": False,
-                    "limit_responses": 100,
-                    "spam_prevention_level": "medium"
-                }
-            }
-        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
-class FormTemplate(BaseModel):
-    id: Optional[str] = None
-    title: str
-    description: str
-    category: str
-    preview_image_url: Optional[str] = None
-    form_data: Form
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class FormSubmission(BaseModel):
-    id: Optional[str] = None
+class FormResponse(BaseModel):
     form_id: str
-    user_id: Optional[str] = None
     answers: Dict[str, Any]
+    respondent_id: Optional[str] = None
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
     ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    is_spam: bool = False
-    spam_score: float = 0.0
-
-class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-    full_name: Optional[str] = None
-
-class User(BaseModel):
-    id: Optional[str] = None
-    username: str
-    email: EmailStr
-    full_name: Optional[str] = None
-    disabled: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    subscription_tier: str = "free"  # free, premium, enterprise
     
     class Config:
-        schema_extra = {
-            "example": {
-                "username": "johndoe",
-                "email": "john.doe@example.com",
-                "full_name": "John Doe"
-            }
-        }
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
-class UserInDB(User):
-    hashed_password: str
+class Template(FormBase):
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    category: str
+    tags: List[str] = []
+    
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
@@ -317,106 +230,60 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
-    except JWTError:
+    except jwt.PyJWTError:
         raise credentials_exception
     user = await get_user(username=token_data.username)
     if user is None:
         raise credentials_exception
     return user
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)):
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
+async def get_current_active_user(current_user: UserInDB = Depends(get_current_user)):
     return current_user
 
-# Convert MongoDB ObjectId to string
-def serialize_doc_id(doc):
-    if doc.get('_id'):
-        doc['id'] = str(doc.pop('_id'))
-    return doc
-
-# Spam detection function
-def check_for_spam(submission: FormSubmission, level: SpamPreventionLevel) -> tuple:
-    spam_score = 0.0
-    is_spam = False
-    
-    # Basic checks
-    if level in [SpamPreventionLevel.LOW, SpamPreventionLevel.MEDIUM, 
-                SpamPreventionLevel.HIGH, SpamPreventionLevel.VERY_HIGH]:
-        # Check for empty required fields
-        for key, value in submission.answers.items():
-            if not value and key.endswith('_required'):
-                spam_score += 0.3
-    
-    # More advanced checks for medium+ levels
-    if level in [SpamPreventionLevel.MEDIUM, SpamPreventionLevel.HIGH, 
-               SpamPreventionLevel.VERY_HIGH]:
-        # Check for common spam patterns in text fields
-        for key, value in submission.answers.items():
-            if isinstance(value, str):
-                # Check for excessive URLs
-                url_count = len(re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', value))
-                if url_count > 2:
-                    spam_score += 0.1 * url_count
-                
-                # Check for common spam keywords
-                spam_keywords = ['viagra', 'casino', 'lottery', 'prize', 'winner', 'free money']
-                for keyword in spam_keywords:
-                    if keyword.lower() in value.lower():
-                        spam_score += 0.2
-    
-    # Strict checks for high+ levels
-    if level in [SpamPreventionLevel.HIGH, SpamPreventionLevel.VERY_HIGH]:
-        # Check submission speed (if we have metadata)
-        if hasattr(submission, 'metadata') and 'time_spent' in submission.metadata:
-            time_spent = submission.metadata['time_spent']
-            if time_spent < 5:  # Less than 5 seconds to fill the form
-                spam_score += 0.3
-        
-        # Check for repeated submissions from same IP
-        # This would need to be implemented with a database check
-    
-    # Very strict checks
-    if level == SpamPreventionLevel.VERY_HIGH:
-        # Add additional checks like honeypot fields, etc.
-        if hasattr(submission, 'honeypot') and submission.honeypot:
-            spam_score += 0.8
-    
-    # Determine if it's spam based on score and level
-    threshold_map = {
-        SpamPreventionLevel.LOW: 0.7,
-        SpamPreventionLevel.MEDIUM: 0.5,
-        SpamPreventionLevel.HIGH: 0.3,
-        SpamPreventionLevel.VERY_HIGH: 0.2
-    }
-    
-    is_spam = spam_score >= threshold_map[level]
-    
-    return is_spam, spam_score
-
-# Endpoints
+# Routes
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Health check endpoint for Render ping"""
+    return {"status": "healthy", "timestamp": datetime.utcnow()}
 
-# Keep Render instance alive
-@app.on_event("startup")
-async def startup_event():
-    async def keep_alive():
-        while True:
-            try:
-                await health_check()
-                await asyncio.sleep(840)  # 14 minutes
-            except Exception as e:
-                logger.error(f"Keep-alive error: {e}")
-                await asyncio.sleep(60)  # Wait a minute and try again
+@app.post("/register", response_model=User)
+@limiter.limit("10/minute")
+async def register_user(request: Request, user: UserCreate):
+    # Check if username or email already exists
+    existing_user = await users_collection.find_one({
+        "$or": [
+            {"username": user.username},
+            {"email": user.email}
+        ]
+    })
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already registered"
+        )
     
-    import asyncio
-    asyncio.create_task(keep_alive())
+    # Create new user
+    hashed_password = get_password_hash(user.password)
+    user_data = UserInDB(
+        **user.dict(),
+        hashed_password=hashed_password,
+        created_at=datetime.utcnow()
+    )
+    
+    # Insert into database
+    new_user = await users_collection.insert_one(user_data.dict(by_alias=True))
+    
+    # Return user without password
+    created_user = await users_collection.find_one({"_id": new_user.inserted_id})
+    return User(
+        id=str(created_user["_id"]),
+        username=created_user["username"],
+        email=created_user["email"],
+        created_at=created_user["created_at"]
+    )
 
-# Authentication endpoints
 @app.post("/token", response_model=Token)
-@limiter.limit("5/minute")
+@limiter.limit("10/minute")
 async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     user = await authenticate_user(form_data.username, form_data.password)
     if not user:
@@ -431,826 +298,329 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.post("/users/", response_model=User, status_code=status.HTTP_201_CREATED)
-@limiter.limit("3/minute")
-async def create_user(request: Request, user: UserCreate):
-    # Check if username exists
-    existing_user = await users_collection.find_one({"username": user.username})
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
-        )
-    
-    # Check if email exists
-    existing_email = await users_collection.find_one({"email": user.email})
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
-    # Create new user
-    hashed_password = get_password_hash(user.password)
-    user_data = user.dict()
-    user_data.pop("password")
-    user_data["hashed_password"] = hashed_password
-    user_data["created_at"] = datetime.utcnow()
-    
-    result = await users_collection.insert_one(user_data)
-    
-    created_user = await users_collection.find_one({"_id": result.inserted_id})
-    return serialize_doc_id(created_user)
+@app.get("/users/me", response_model=User)
+async def read_users_me(current_user: UserInDB = Depends(get_current_active_user)):
+    return User(
+        id=str(current_user.id),
+        username=current_user.username,
+        email=current_user.email,
+        created_at=current_user.created_at
+    )
 
-@app.get("/users/me/", response_model=User)
-async def read_users_me(current_user: User = Depends(get_current_active_user)):
-    return current_user
-
-# Form endpoints
-@app.post("/forms/", response_model=Form, status_code=status.HTTP_201_CREATED)
-@limiter.limit("10/minute")
-async def create_form(request: Request, form: Form, current_user: User = Depends(get_current_active_user)):
-    form_data = form.dict()
-    form_data["user_id"] = current_user.id
-    form_data["created_at"] = datetime.utcnow()
-    form_data["updated_at"] = datetime.utcnow()
-    
-    result = await forms_collection.insert_one(form_data)
-    
-    created_form = await forms_collection.find_one({"_id": result.inserted_id})
-    return serialize_doc_id(created_form)
-
-@app.get("/forms/")
-@limiter.limit("30/minute")
-async def get_forms(
-    request: Request, 
-    skip: int = 0, 
-    limit: int = 10,
-    current_user: User = Depends(get_current_active_user)
+@app.post("/forms", response_model=Form)
+@limiter.limit("20/minute")
+async def create_form(
+    request: Request,
+    form: FormCreate,
+    current_user: UserInDB = Depends(get_current_active_user)
 ):
-    forms = []
-    cursor = forms_collection.find({"user_id": current_user.id}).skip(skip).limit(limit)
+    form_data = Form(
+        **form.dict(),
+        creator_id=str(current_user.id),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+        response_count=0
+    )
     
-    async for form in cursor:
-        forms.append(serialize_doc_id(form))
+    result = await forms_collection.insert_one(form_data.dict(by_alias=True))
+    created_form = await forms_collection.find_one({"_id": result.inserted_id})
+    
+    return created_form
+
+@app.get("/forms", response_model=List[Form])
+@limiter.limit("60/minute")
+async def get_user_forms(
+    request: Request,
+    current_user: UserInDB = Depends(get_current_active_user),
+    skip: int = 0,
+    limit: int = 20
+):
+    forms = await forms_collection.find(
+        {"creator_id": str(current_user.id)}
+    ).sort("created_at", pymongo.DESCENDING).skip(skip).limit(limit).to_list(length=limit)
     
     return forms
 
 @app.get("/forms/{form_id}", response_model=Form)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def get_form(request: Request, form_id: str):
     try:
         form = await forms_collection.find_one({"_id": ObjectId(form_id)})
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
-    
-    if not form:
+        if form is None:
+            raise HTTPException(status_code=404, detail="Form not found")
+        
+        # Check if form has expired
+        if form.get("expiry_date") and datetime.utcnow() > form["expiry_date"]:
+            raise HTTPException(status_code=410, detail="Form has expired")
+            
+        # Check if max responses reached
+        if form.get("max_responses") and form["response_count"] >= form["max_responses"]:
+            raise HTTPException(status_code=410, detail="Form has reached maximum responses")
+            
+        return form
+    except:
         raise HTTPException(status_code=404, detail="Form not found")
-    
-    return serialize_doc_id(form)
 
 @app.put("/forms/{form_id}", response_model=Form)
-@limiter.limit("15/minute")
+@limiter.limit("20/minute")
 async def update_form(
     request: Request,
     form_id: str, 
-    form_update: Form,
-    current_user: User = Depends(get_current_active_user)
+    form_update: FormCreate,
+    current_user: UserInDB = Depends(get_current_active_user)
 ):
     try:
-        # Verify the form exists and belongs to the user
+        # Check form exists and belongs to user
         existing_form = await forms_collection.find_one({
             "_id": ObjectId(form_id),
-            "user_id": current_user.id
+            "creator_id": str(current_user.id)
         })
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
-    
-    if not existing_form:
-        raise HTTPException(status_code=404, detail="Form not found or you don't have permission to edit it")
-    
-    # Update the form
-    form_data = form_update.dict(exclude_unset=True)
-    form_data["updated_at"] = datetime.utcnow()
-    
-    updated_form = await forms_collection.find_one_and_update(
-        {"_id": ObjectId(form_id)},
-        {"$set": form_data},
-        return_document=ReturnDocument.AFTER
-    )
-    
-    return serialize_doc_id(updated_form)
+        
+        if not existing_form:
+            raise HTTPException(status_code=404, detail="Form not found or you don't have permission")
+        
+        # Update form
+        form_data = {
+            **form_update.dict(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        await forms_collection.update_one(
+            {"_id": ObjectId(form_id)},
+            {"$set": form_data}
+        )
+        
+        updated_form = await forms_collection.find_one({"_id": ObjectId(form_id)})
+        return updated_form
+    except:
+        raise HTTPException(status_code=404, detail="Form not found")
 
 @app.delete("/forms/{form_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
 async def delete_form(
     request: Request,
     form_id: str,
-    current_user: User = Depends(get_current_active_user)
+    current_user: UserInDB = Depends(get_current_active_user)
 ):
     try:
-        # Verify the form exists and belongs to the user
+        # Check form exists and belongs to user
         result = await forms_collection.delete_one({
             "_id": ObjectId(form_id),
-            "user_id": current_user.id
+            "creator_id": str(current_user.id)
         })
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
-    
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Form not found or you don't have permission to delete it")
-    
-    # Also delete all submissions for this form
-    await submissions_collection.delete_many({"form_id": form_id})
-    
-    return None
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Form not found or you don't have permission")
+        
+        # Delete all responses for this form
+        await responses_collection.delete_many({"form_id": form_id})
+        
+        return None
+    except:
+        raise HTTPException(status_code=404, detail="Form not found")
 
-# Form submissions
-@app.post("/forms/{form_id}/submit", response_model=FormSubmission)
-@limiter.limit("20/minute")
-async def submit_form(
+@app.post("/forms/{form_id}/submit", status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
+async def submit_form_response(
     request: Request,
     form_id: str,
-    submission: Dict[str, Any],
-    background_tasks: BackgroundTasks
+    response: Dict[str, Any]
 ):
     try:
+        # Get the form
         form = await forms_collection.find_one({"_id": ObjectId(form_id)})
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
-    
-    if not form:
-        raise HTTPException(status_code=404, detail="Form not found")
-    
-    # Check if form has expired
-    if form.get("settings", {}).get("expiration_date"):
-        expiration_date = form["settings"]["expiration_date"]
-        if datetime.utcnow() > expiration_date:
-            raise HTTPException(status_code=403, detail="This form has expired")
-    
-    # Check if form has reached response limit
-    if form.get("settings", {}).get("limit_responses"):
-        limit = form["settings"]["limit_responses"]
-        count = await submissions_collection.count_documents({"form_id": form_id})
-        if count >= limit:
-            raise HTTPException(status_code=403, detail="This form has reached its response limit")
-    
-    # Check if form requires login
-    if form.get("settings", {}).get("require_login", False):
-        # This would require the user to be authenticated
-        # For simplicity, we'll just add a placeholder
-        user_id = None
-        try:
-            auth_header = request.headers.get("Authorization")
-            if auth_header and auth_header.startswith("Bearer "):
-                token = auth_header.split(" ")[1]
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-                username = payload.get("sub")
-                if username:
-                    user = await get_user(username)
-                    if user:
-                        user_id = user.id
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required to submit this form",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        if not form:
+            raise HTTPException(status_code=404, detail="Form not found")
         
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required to submit this form",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    else:
-        user_id = None
-    
-    # Validate required fields
-    for question in form.get("questions", []):
-        if question.get("required", False):
-            question_id = question.get("id")
-            if question_id not in submission or not submission[question_id]:
+        # Check if form has expired
+        if form.get("expiry_date") and datetime.utcnow() > form["expiry_date"]:
+            raise HTTPException(status_code=410, detail="Form has expired")
+            
+        # Check if max responses reached
+        if form.get("max_responses") and form["response_count"] >= form["max_responses"]:
+            raise HTTPException(status_code=410, detail="Form has reached maximum responses")
+        
+        # Validate required fields
+        for question in form["questions"]:
+            if question["required"] and question["id"] not in response["answers"]:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Required field '{question.get('title')}' is missing"
+                    detail=f"Required question '{question['question_text']}' was not answered"
                 )
-    
-    # Create submission record
-    submission_data = {
-        "form_id": form_id,
-        "user_id": user_id,
-        "answers": submission,
-        "ip_address": request.client.host,
-        "user_agent": request.headers.get("User-Agent"),
-        "created_at": datetime.utcnow()
-    }
-    
-    # Check for spam
-    spam_level = form.get("settings", {}).get("spam_prevention_level", SpamPreventionLevel.MEDIUM)
-    form_submission = FormSubmission(**submission_data)
-    is_spam, spam_score = check_for_spam(form_submission, spam_level)
-    
-    submission_data["is_spam"] = is_spam
-    submission_data["spam_score"] = spam_score
-    
-    # Insert the submission
-    result = await submissions_collection.insert_one(submission_data)
-    
-    # Get the created submission
-    created_submission = await submissions_collection.find_one({"_id": result.inserted_id})
-    
-    # Send notification emails in the background if configured
-    if form.get("settings", {}).get("notification_emails"):
-        background_tasks.add_task(
-            send_notification_emails, 
-            form, 
-            created_submission,
-            spam_level
+        
+        # Create response object
+        form_response = FormResponse(
+            form_id=form_id,
+            answers=response["answers"],
+            submitted_at=datetime.utcnow(),
+            ip_address=request.client.host
         )
-    
-    return serialize_doc_id(created_submission)
+        
+        # Insert response
+        await responses_collection.insert_one(form_response.dict())
+        
+        # Update response count
+        await forms_collection.update_one(
+            {"_id": ObjectId(form_id)},
+            {"$inc": {"response_count": 1}}
+        )
+        
+        return {"message": "Response submitted successfully"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit response: {str(e)}")
 
-async def send_notification_emails(form, submission, spam_level):
-    # This would be implemented with an email service
-    # For now, we'll just log it
-    notification_emails = form.get("settings", {}).get("notification_emails", [])
-    logger.info(f"Would send notification to {notification_emails} for form {form['title']}")
-    # In a real implementation, you'd use something like:
-    # await send_email(notification_emails, "New form submission", email_body)
-
-@app.get("/forms/{form_id}/submissions")
+@app.get("/forms/{form_id}/responses", response_model=List[FormResponse])
 @limiter.limit("20/minute")
-async def get_form_submissions(
+async def get_form_responses(
     request: Request,
     form_id: str,
+    current_user: UserInDB = Depends(get_current_active_user),
     skip: int = 0,
-    limit: int = 50,
-    include_spam: bool = False,
-    current_user: User = Depends(get_current_active_user)
+    limit: int = 100
 ):
-    try:
-        # Verify the form exists and belongs to the user
-        form = await forms_collection.find_one({
-            "_id": ObjectId(form_id),
-            "user_id": current_user.id
-        })
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
+    # Check if user owns the form
+    form = await forms_collection.find_one({
+        "_id": ObjectId(form_id),
+        "creator_id": str(current_user.id)
+    })
     
     if not form:
-        raise HTTPException(status_code=404, detail="Form not found or you don't have permission to view submissions")
+        raise HTTPException(
+            status_code=404,
+            detail="Form not found or you don't have permission to view responses"
+        )
     
-    # Build query
-    query = {"form_id": form_id}
-    if not include_spam:
-        query["is_spam"] = False
+    # Get responses
+    responses = await responses_collection.find(
+        {"form_id": form_id}
+    ).sort("submitted_at", pymongo.DESCENDING).skip(skip).limit(limit).to_list(length=limit)
     
-    # Get submissions
-    submissions = []
-    cursor = submissions_collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
-    
-    async for submission in cursor:
-        submissions.append(serialize_doc_id(submission))
-    
-    return submissions
+    return responses
 
-# Templates
-@app.get("/templates/")
+@app.post("/upload", response_model=Dict[str, str])
+@limiter.limit("10/minute")
+async def upload_file(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: UserInDB = Depends(get_current_active_user)
+):
+    # Check file size (limit to 5MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum size is 5MB."
+        )
+    
+    # Check file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type. Allowed types: {', '.join(allowed_types)}"
+        )
+    
+    # Store in GridFS
+    file_id = fs.put(
+        contents,
+        filename=file.filename,
+        content_type=file.content_type,
+        user_id=str(current_user.id)
+    )
+    
+    return {"file_id": str(file_id)}
+
+@app.get("/templates", response_model=List[Template])
 @limiter.limit("30/minute")
 async def get_templates(
     request: Request,
+    category: Optional[str] = None,
     skip: int = 0,
-    limit: int = 20,
-    category: Optional[str] = None
+    limit: int = 20
 ):
     query = {}
     if category:
         query["category"] = category
     
-    templates = []
-    cursor = templates_collection.find(query).skip(skip).limit(limit)
-    
-    async for template in cursor:
-        templates.append(serialize_doc_id(template))
-    
+    templates = await templates_collection.find(query).skip(skip).limit(limit).to_list(length=limit)
     return templates
 
-@app.get("/templates/{template_id}")
-@limiter.limit("20/minute")
-async def get_template(request: Request, template_id: str):
-    try:
-        template = await templates_collection.find_one({"_id": ObjectId(template_id)})
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid template ID format")
-    
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    
-    return serialize_doc_id(template)
-
-@app.post("/forms/from-template", response_model=Form)
-@limiter.limit("10/minute")
-async def create_form_from_template(
-    request: Request,
-    template_id: str,
-    form_title: str,
-    current_user: User = Depends(get_current_active_user)
+@app.post("/templates", response_model=Template, status_code=status.HTTP_201_CREATED)
+async def create_template(
+    template: Template,
+    current_user: UserInDB = Depends(get_current_active_user)
 ):
-    try:
-        template = await templates_collection.find_one({"_id": ObjectId(template_id)})
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid template ID format")
-    
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    
-    # Create a new form based on the template
-    form_data = template["form_data"]
-    form_data["title"] = form_title
-    form_data["user_id"] = current_user.id
-    form_data["created_at"] = datetime.utcnow()
-    form_data["updated_at"] = datetime.utcnow()
-    form_data["is_template"] = False
-    
-    result = await forms_collection.insert_one(form_data)
-    
-    created_form = await forms_collection.find_one({"_id": result.inserted_id})
-    return serialize_doc_id(created_form)
+    # Only admins can create templates (add admin check if needed)
+    template_data = template.dict(by_alias=True)
+    result = await templates_collection.insert_one(template_data)
+    created_template = await templates_collection.find_one({"_id": result.inserted_id})
+    return created_template
 
-# File upload endpoint for form images
-@app.post("/upload/")
-@limiter.limit("20/minute")
-async def upload_file(
-    request: Request,
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_active_user)
-):
-    # Validate file size (max 5MB)
-    contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
-    
-    # Validate file type
-    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="File type not allowed")
-    
-    # Store file in GridFS
-    file_id = await client.formbuilder.fs.files.upload_from_stream(
-        file.filename,
-        contents,
-        metadata={"user_id": current_user.id, "content_type": file.content_type}
-    )
-    
-    # Return the file URL
-    return {
-        "file_id": str(file_id),
-        "url": f"/files/{file_id}",
-        "filename": file.filename,
-        "content_type": file.content_type
-    }
-
-@app.get("/files/{file_id}")
-async def get_file(file_id: str):
-    try:
-        # Get file from GridFS
-        grid_out = await client.formbuilder.fs.files.open_download_stream(ObjectId(file_id))
-        contents = await grid_out.read()
-        
-        # Create response with proper content type
-        from fastapi.responses import Response
-        metadata = await client.formbuilder.fs.files.find_one({"_id": ObjectId(file_id)})
-        content_type = metadata.get("metadata", {}).get("content_type", "application/octet-stream")
-        
-        return Response(
-            content=contents,
-            media_type=content_type
-        )
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"File not found: {str(e)}")
-
-# Analytics endpoints
-@app.get("/forms/{form_id}/analytics")
+@app.get("/analytics/forms/{form_id}", response_model=Dict[str, Any])
 @limiter.limit("20/minute")
 async def get_form_analytics(
     request: Request,
     form_id: str,
-    current_user: User = Depends(get_current_active_user)
+    current_user: UserInDB = Depends(get_current_active_user)
 ):
-    try:
-        # Verify the form exists and belongs to the user
-        form = await forms_collection.find_one({
-            "_id": ObjectId(form_id),
-            "user_id": current_user.id
-        })
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
+    # Check if user owns the form
+    form = await forms_collection.find_one({
+        "_id": ObjectId(form_id),
+        "creator_id": str(current_user.id)
+    })
     
     if not form:
-        raise HTTPException(status_code=404, detail="Form not found or you don't have permission to view analytics")
+        raise HTTPException(
+            status_code=404,
+            detail="Form not found or you don't have permission"
+        )
     
-    # Check if analytics are enabled
-    if not form.get("settings", {}).get("analytics_enabled", True):
-        raise HTTPException(status_code=403, detail="Analytics are disabled for this form")
+    # Get response count
+    response_count = await responses_collection.count_documents({"form_id": form_id})
     
-    # Get basic analytics
-    total_submissions = await submissions_collection.count_documents({"form_id": form_id})
-    spam_submissions = await submissions_collection.count_documents({"form_id": form_id, "is_spam": True})
-    
-    # Get submissions over time (last 30 days)
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    
-    pipeline = [
-        {"$match": {"form_id": form_id, "created_at": {"$gte": thirty_days_ago}}},
-        {"$group": {
-            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
-            "count": {"$sum": 1}
-        }},
-        {"$sort": {"_id": 1}}
-    ]
-    
-    submissions_by_day = []
-    async for day in submissions_collection.aggregate(pipeline):
-        submissions_by_day.append({
-            "date": day["_id"],
-            "count": day["count"]
-        })
-    
-    # Get question analytics
-    question_analytics = {}
-    
-    for question in form.get("questions", []):
-        q_id = question.get("id")
-        q_type = question.get("type")
+    # Get analytics for each question
+    analytics = {}
+    for question in form["questions"]:
+        question_id = question["id"]
+        question_type = question["question_type"]
         
-        if q_type in ["select", "multi_select", "radio", "checkbox"]:
-            # For choice questions, get distribution of answers
+        if question_type in ["multiple_choice", "checkbox", "dropdown"]:
+            # For choice-based questions, count occurrences of each option
             pipeline = [
-                {"$match": {"form_id": form_id, "is_spam": False}},
-                {"$project": {"answer": f"$answers.{q_id}"}},
+                {"$match": {"form_id": form_id}},
+                {"$project": {"answer": f"$answers.{question_id}"}},
+                {"$unwind": {"path": "$answer", "preserveNullAndEmptyArrays": True}},
                 {"$group": {"_id": "$answer", "count": {"$sum": 1}}},
                 {"$sort": {"count": -1}}
             ]
-            
-            choices = []
-            async for choice in submissions_collection.aggregate(pipeline):
-                choices.append({
-                    "value": choice["_id"],
-                    "count": choice["count"]
-                })
-            
-            question_analytics[q_id] = {
-                "type": q_type,
-                "title": question.get("title"),
-                "choices": choices
+            results = await responses_collection.aggregate(pipeline).to_list(length=100)
+            analytics[question_id] = {
+                "question_text": question["question_text"],
+                "type": question_type,
+                "options": {r["_id"]: r["count"] for r in results if r["_id"] is not None}
+            }
+        elif question_type in ["text", "number", "location"]:
+            # For text-based questions, just count responses
+            count = await responses_collection.count_documents({
+                "form_id": form_id,
+                f"answers.{question_id}": {"$exists": True}
+            })
+            analytics[question_id] = {
+                "question_text": question["question_text"],
+                "type": question_type,
+                "response_count": count
             }
     
     return {
         "form_id": form_id,
-        "total_submissions": total_submissions,
-        "spam_submissions": spam_submissions,
-        "submissions_by_day": submissions_by_day,
-        "question_analytics": question_analytics,
-        "completion_rate": None  # Would require tracking of abandoned forms
+        "title": form["title"],
+        "response_count": response_count,
+        "questions": analytics
     }
 
-# Admin endpoints for managing templates
-@app.post("/admin/templates", response_model=FormTemplate)
-@limiter.limit("10/minute")
-async def create_template(
-    request: Request,
-    template: FormTemplate,
-    current_user: User = Depends(get_current_active_user)
-):
-    # Check if user has admin privileges
-    if current_user.subscription_tier != "enterprise":
-        raise HTTPException(status_code=403, detail="Only enterprise users can create templates")
-    
-    template_data = template.dict()
-    template_data["created_at"] = datetime.utcnow()
-    
-    result = await templates_collection.insert_one(template_data)
-    
-    created_template = await templates_collection.find_one({"_id": result.inserted_id})
-    return serialize_doc_id(created_template)
-
-# Convert form to template
-@app.post("/forms/{form_id}/to-template", response_model=FormTemplate)
-@limiter.limit("10/minute")
-async def convert_form_to_template(
-    request: Request,
-    form_id: str,
-    template_data: dict,
-    current_user: User = Depends(get_current_active_user)
-):
-    # Verify the form exists and belongs to the user
-    try:
-        form = await forms_collection.find_one({
-            "_id": ObjectId(form_id),
-            "user_id": current_user.id
-        })
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
-    
-    if not form:
-        raise HTTPException(status_code=404, detail="Form not found or you don't have permission")
-    
-    # Create template from form
-    template = {
-        "title": template_data.get("title", form.get("title")),
-        "description": template_data.get("description", ""),
-        "category": template_data.get("category", "Other"),
-        "preview_image_url": template_data.get("preview_image_url"),
-        "form_data": form,
-        "created_at": datetime.utcnow()
-    }
-    
-    result = await templates_collection.insert_one(template)
-    
-    created_template = await templates_collection.find_one({"_id": result.inserted_id})
-    return serialize_doc_id(created_template)
-
-# User management endpoints
-@app.put("/users/me", response_model=User)
-@limiter.limit("10/minute")
-async def update_user(
-    request: Request,
-    user_update: dict,
-    current_user: User = Depends(get_current_active_user)
-):
-    # Prevent updating critical fields
-    if "username" in user_update or "email" in user_update:
-        raise HTTPException(status_code=400, detail="Cannot update username or email")
-    
-    # Update the user
-    updated_user = await users_collection.find_one_and_update(
-        {"_id": ObjectId(current_user.id)},
-        {"$set": user_update},
-        return_document=ReturnDocument.AFTER
-    )
-    
-    return serialize_doc_id(updated_user)
-
-@app.put("/users/me/password")
-@limiter.limit("5/minute")
-async def change_password(
-    request: Request,
-    password_data: dict,
-    current_user: User = Depends(get_current_active_user)
-):
-    # Verify current password
-    user = await users_collection.find_one({"_id": ObjectId(current_user.id)})
-    if not verify_password(password_data.get("current_password"), user.get("hashed_password")):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    
-    # Update password
-    hashed_password = get_password_hash(password_data.get("new_password"))
-    await users_collection.update_one(
-        {"_id": ObjectId(current_user.id)},
-        {"$set": {"hashed_password": hashed_password}}
-    )
-    
-    return {"message": "Password updated successfully"}
-
-# Form sharing and collaboration
-@app.post("/forms/{form_id}/share")
-@limiter.limit("10/minute")
-async def share_form(
-    request: Request,
-    form_id: str,
-    share_data: dict,
-    current_user: User = Depends(get_current_active_user)
-):
-    try:
-        # Verify the form exists and belongs to the user
-        form = await forms_collection.find_one({
-            "_id": ObjectId(form_id),
-            "user_id": current_user.id
-        })
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid form ID format")
-    
-    if not form:
-        raise HTTPException(status_code=404, detail="Form not found or you don't have permission")
-    
-    # Generate a sharing token
-    share_token = secrets.token_urlsafe(16)
-    expires_at = datetime.utcnow() + timedelta(days=share_data.get("expires_days", 30))
-    
-    # Save sharing information
-    await forms_collection.update_one(
-        {"_id": ObjectId(form_id)},
-        {"$set": {
-            "sharing": {
-                "token": share_token,
-                "expires_at": expires_at,
-                "created_at": datetime.utcnow(),
-                "permissions": share_data.get("permissions", ["view"])
-            }
-        }}
-    )
-    
-    return {
-        "share_token": share_token,
-        "share_url": f"/shared/{share_token}",
-        "expires_at": expires_at
-    }
-
-@app.get("/shared/{share_token}")
-@limiter.limit("30/minute")
-async def get_shared_form(request: Request, share_token: str):
-    # Find form by share token
-    form = await forms_collection.find_one({"sharing.token": share_token})
-    
-    if not form:
-        raise HTTPException(status_code=404, detail="Shared form not found or link has expired")
-    
-    # Check if sharing has expired
-    if form.get("sharing", {}).get("expires_at", datetime.min) < datetime.utcnow():
-        raise HTTPException(status_code=403, detail="Sharing link has expired")
-    
-    # Return form data with limited information
-    safe_form = {
-        "id": str(form.get("_id")),
-        "title": form.get("title"),
-        "description": form.get("description"),
-        "start_screen": form.get("start_screen"),
-        "questions": form.get("questions"),
-        "end_screen": form.get("end_screen"),
-        "end_screen_type": form.get("end_screen_type"),
-        "settings": {
-            "require_login": form.get("settings", {}).get("require_login", False),
-            "limit_responses": form.get("settings", {}).get("limit_responses"),
-            "spam_prevention_level": form.get("settings", {}).get("spam_prevention_level")
-        }
-    }
-    
-    return safe_form
-
-# Initialize database with default templates
-@app.on_event("startup")
-async def create_default_templates():
-    # Check if we already have templates
-    count = await templates_collection.count_documents({})
-    if count > 0:
-        return
-    
-    # Create some default templates
-    default_templates = [
-        {
-            "title": "Customer Feedback",
-            "description": "Collect feedback from your customers",
-            "category": "Feedback",
-            "form_data": {
-                "title": "Customer Feedback Form",
-                "description": "We value your feedback!",
-                "start_screen": {
-                    "title": "Customer Feedback Survey",
-                    "description": "Your feedback helps us improve our services. This survey will take about 2 minutes to complete."
-                },
-                "questions": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "text",
-                        "title": "What is your name?",
-                        "required": True,
-                        "placeholder": "John Doe"
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "email",
-                        "title": "Email address",
-                        "required": True,
-                        "placeholder": "john@example.com"
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "radio",
-                        "title": "How satisfied are you with our service?",
-                        "required": True,
-                        "options": [
-                            {"id": str(uuid.uuid4()), "value": "5", "label": "Very satisfied"},
-                            {"id": str(uuid.uuid4()), "value": "4", "label": "Satisfied"},
-                            {"id": str(uuid.uuid4()), "value": "3", "label": "Neutral"},
-                            {"id": str(uuid.uuid4()), "value": "2", "label": "Dissatisfied"},
-                            {"id": str(uuid.uuid4()), "value": "1", "label": "Very dissatisfied"}
-                        ]
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "multi_select",
-                        "title": "What aspects of our service did you like?",
-                        "description": "Select all that apply",
-                        "required": False,
-                        "options": [
-                            {"id": str(uuid.uuid4()), "value": "quality", "label": "Quality"},
-                            {"id": str(uuid.uuid4()), "value": "speed", "label": "Speed"},
-                            {"id": str(uuid.uuid4()), "value": "price", "label": "Price"},
-                            {"id": str(uuid.uuid4()), "value": "support", "label": "Customer support"},
-                            {"id": str(uuid.uuid4()), "value": "other", "label": "Other"}
-                        ]
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "textarea",
-                        "title": "Do you have any additional comments or suggestions?",
-                        "required": False,
-                        "placeholder": "Your comments help us improve"
-                    }
-                ],
-                "end_screen": {
-                    "title": "Thank You!",
-                    "description": "We appreciate your feedback. Your responses will help us improve our services."
-                },
-                "end_screen_type": "static",
-                "settings": {
-                    "require_login": False,
-                    "spam_prevention_level": "medium",
-                    "analytics_enabled": True
-                }
-            },
-            "created_at": datetime.utcnow()
-        },
-        {
-            "title": "Event Registration",
-            "description": "Collect registrations for your event",
-            "category": "Events",
-            "form_data": {
-                "title": "Event Registration Form",
-                "description": "Register for our upcoming event",
-                "start_screen": {
-                    "title": "Event Registration",
-                    "description": "Please fill out this form to register for our upcoming event."
-                },
-                "questions": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "text",
-                        "title": "Full Name",
-                        "required": True,
-                        "placeholder": "John Doe"
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "email",
-                        "title": "Email Address",
-                        "required": True,
-                        "placeholder": "john@example.com"
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "phone",
-                        "title": "Phone Number",
-                        "required": True,
-                        "placeholder": "+1 (123) 456-7890"
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "radio",
-                        "title": "Which session will you attend?",
-                        "required": True,
-                        "options": [
-                            {"id": str(uuid.uuid4()), "value": "morning", "label": "Morning (9 AM - 12 PM)"},
-                            {"id": str(uuid.uuid4()), "value": "afternoon", "label": "Afternoon (1 PM - 4 PM)"},
-                            {"id": str(uuid.uuid4()), "value": "both", "label": "Both sessions"}
-                        ]
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "checkbox",
-                        "title": "Dietary Restrictions",
-                        "required": False,
-                        "options": [
-                            {"id": str(uuid.uuid4()), "value": "vegetarian", "label": "Vegetarian"},
-                            {"id": str(uuid.uuid4()), "value": "vegan", "label": "Vegan"},
-                            {"id": str(uuid.uuid4()), "value": "gluten", "label": "Gluten-free"},
-                            {"id": str(uuid.uuid4()), "value": "none", "label": "None"}
-                        ]
-                    }
-                ],
-                "end_screen": {
-                    "title": "Registration Complete!",
-                    "description": "Thank you for registering. You will receive a confirmation email shortly."
-                },
-                "end_screen_type": "static",
-                "settings": {
-                    "require_login": False,
-                    "limit_responses": 100,
-                    "spam_prevention_level": "high",
-                    "analytics_enabled": True
-                }
-            },
-            "created_at": datetime.utcnow()
-        }
-    ]
-    
-    await templates_collection.insert_many(default_templates)
-    logger.info("Created default templates")
-
+# Run the app using Uvicorn if executed directly
 if __name__ == "__main__":
     import uvicorn
-    import os
-    
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
