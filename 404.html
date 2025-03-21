@@ -2076,11 +2076,18 @@
                 case 'email':
                 case 'url':
                 case 'phone':
+                case 'location':
+                    answer = document.getElementById(`input-${question.id}`).value;
+                    break;
+                    
                 case 'number':
                 case 'date':
                 case 'time':
-                case 'location':
                     answer = document.getElementById(`input-${question.id}`).value;
+                    // Convert to number if it's a number type
+                    if (question.type === 'number' && answer !== '') {
+                        answer = Number(answer);
+                    }
                     break;
                     
                 case 'multiple_choice':
@@ -2102,14 +2109,15 @@
                     break;
                     
                 case 'rating':
-                    const selectedRating = slide.querySelector('.rating-btn.selected');
-                    if (selectedRating) {
-                        answer = selectedRating.dataset.value;
-                    }
-                    break;
-                    
                 case 'scale':
-                    answer = slide.querySelector('.scale-slider').value;
+                    if (question.type === 'rating') {
+                        const selectedRating = slide.querySelector('.rating-btn.selected');
+                        if (selectedRating) {
+                            answer = Number(selectedRating.dataset.value);
+                        }
+                    } else {
+                        answer = Number(slide.querySelector('.scale-slider').value);
+                    }
                     break;
                     
                 case 'file':
@@ -2132,18 +2140,46 @@
         
         async function submitForm() {
             try {
+                // Prepare answers for submission
+                const finalAnswers = {};
+                
+                // Process each answer before sending
+                for (const [questionId, answer] of Object.entries(formState.answers)) {
+                    // Find the question type
+                    const question = formState.formData.questions.find(q => q.id === questionId);
+                    
+                    if (!question) continue;
+                    
+                    // Special handling for file uploads
+                    if (question.type === 'file' && answer && typeof answer === 'object' && answer.data) {
+                        // The backend expects this format for file data
+                        finalAnswers[questionId] = answer;
+                    } 
+                    // Special handling for numbers (convert string to number)
+                    else if (question.type === 'number' || question.type === 'rating' || question.type === 'scale') {
+                        finalAnswers[questionId] = Number(answer);
+                    }
+                    // For all other types, pass through as is
+                    else {
+                        finalAnswers[questionId] = answer;
+                    }
+                }
+                
+                console.log('Submitting form data:', finalAnswers);
+                
                 // Submit answers to the API
                 const response = await fetch(`${API_URL}/f/${formSlug}/submit`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(formState.answers)
+                    body: JSON.stringify(finalAnswers)
                 });
                 
                 const result = await response.json();
                 
                 if (!response.ok) {
+                    console.error('Form submission error:', result);
                     throw new Error(result.detail || 'Failed to submit form');
                 }
                 
