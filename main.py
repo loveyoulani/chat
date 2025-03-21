@@ -109,13 +109,12 @@ class PyObjectId(ObjectId):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
     
-    # Update for Pydantic v2
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type, _handler):
         from pydantic_core import core_schema
         return core_schema.with_info_plain_validator_function(
             cls.validate,
-            serialization=core_schema.to_string_serializer(),
+            serialization=core_schema.to_string_ser_schema(),  # Fixed method name
             type=cls
         )
 
