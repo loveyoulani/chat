@@ -323,47 +323,88 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 # Enhanced function to recursively evaluate nested dynamic content conditions
 def evaluate_dynamic_content(dynamic_content, answers):
-    """Recursively evaluate nested dynamic content conditions against user answers."""
-    if not dynamic_content:
+    """
+    Recursively evaluate nested dynamic content conditions against user answers.
+    Handles deeply nested conditions with proper recursion.
+    
+    Args:
+        dynamic_content (dict): The dynamic content structure with conditions
+        answers (dict): User's answers with question_id as keys
+        
+    Returns:
+        dict or None: The matched content or None if no match found
+    """
+    if not dynamic_content or not isinstance(dynamic_content, dict):
         return None
     
+    # Handle direct key matches in format "question_id:value"
+    for key, content in dynamic_content.items():
+        if ":" in key and key != "default":
+            question_id, expected_value = key.split(":", 1)
+            if question_id in answers and str(answers[question_id]) == expected_value:
+                return content
+    
+    # Process each question_id -> conditions mapping
+    result = None
     for question_id, conditions in dynamic_content.items():
-        if question_id in answers:
-            answer = answers[question_id]
+        # Skip non-question keys like "title", "description", etc.
+        if question_id in ["title", "description", "custom_html"] or ":" in question_id:
+            continue
             
-            for condition_key, content in conditions.items():
-                # Parse condition (e.g., "equals:value")
-                if ":" in condition_key:
-                    operator, expected = condition_key.split(":", 1)
-                    matches = False
-                    
-                    # String comparison for all types to ensure compatibility
-                    answer_str = str(answer)
-                    
-                    if operator == "equals" and answer_str == expected:
-                        matches = True
-                    elif operator == "not_equals" and answer_str != expected:
-                        matches = True
-                    elif operator == "contains" and expected in answer_str:
-                        matches = True
-                    elif operator == "not_contains" and expected not in answer_str:
-                        matches = True
-                    elif operator == "greater_than" and float(answer) > float(expected):
-                        matches = True
-                    elif operator == "less_than" and float(answer) < float(expected):
-                        matches = True
-                    
-                    if matches:
-                        # If content is another nested condition, recursively evaluate it
-                        if isinstance(content, dict) and any(key in answers for key in content):
-                            nested_result = evaluate_dynamic_content(content, answers)
-                            if nested_result:
-                                return nested_result
-                        else:
-                            # Otherwise return the content directly
-                            return content
+        # If this isn't a question in our answers, skip it
+        if question_id not in answers:
+            continue
+            
+        # Get the user's answer for this question
+        answer = answers[question_id]
+        answer_str = str(answer)
+        
+        # If conditions isn't a dict, skip it
+        if not isinstance(conditions, dict):
+            continue
+            
+        # Check each condition for this question
+        for condition_key, next_level in conditions.items():
+            # Handle condition operators (equals:value, etc.)
+            if ":" in condition_key:
+                operator, expected = condition_key.split(":", 1)
+                matches = False
+                
+                # Evaluate the condition
+                if operator == "equals" and answer_str == expected:
+                    matches = True
+                elif operator == "not_equals" and answer_str != expected:
+                    matches = True
+                elif operator == "contains" and expected in answer_str:
+                    matches = True
+                elif operator == "not_contains" and expected not in answer_str:
+                    matches = True
+                elif operator == "greater_than" and answer_str.replace('.', '', 1).isdigit() and expected.replace('.', '', 1).isdigit():
+                    matches = float(answer) > float(expected)
+                elif operator == "less_than" and answer_str.replace('.', '', 1).isdigit() and expected.replace('.', '', 1).isdigit():
+                    matches = float(answer) < float(expected)
+                
+                # If condition matches, evaluate the next level
+                if matches:
+                    if isinstance(next_level, dict):
+                        # Check if this is a terminal node with content
+                        if any(k in next_level for k in ["title", "description", "custom_html"]):
+                            return next_level
+                        
+                        # Otherwise, recursively evaluate the next level
+                        deeper_result = evaluate_dynamic_content(next_level, answers)
+                        if deeper_result:
+                            return deeper_result
+                    else:
+                        # If next_level is not a dict, return it directly
+                        return next_level
+    
+    # If no match found, return default if available
+    if "default" in dynamic_content:
+        return dynamic_content["default"]
     
     return None
+
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -546,6 +587,17 @@ async def submit_form_response(
     slug: str,
     answers: Dict[str, Any]
 ):
+    """
+    Handle form submission and generate personalized response based on answers.
+    
+    Args:
+        request: The FastAPI request object
+        slug: The form's unique slug
+        answers: Dictionary of question_id -> answer values
+        
+    Returns:
+        JSON response with submission result and personalized end screen content
+    """
     # Find the form
     form = forms_collection.find_one({"slug": slug, "is_active": True})
     if not form:
@@ -636,20 +688,40 @@ async def submit_form_response(
     # Determine the appropriate end screen content based on answers
     end_screen = form["end_screen"]
     
-    # Use the enhanced dynamic content evaluation function
-    dynamic_content = None
-    if end_screen.get("dynamic_content"):
-        dynamic_content = evaluate_dynamic_content(end_screen["dynamic_content"], answers)
+    # Process dynamic content
+    custom_content = None
+    if "dynamic_content" in end_screen and end_screen["dynamic_content"]:
+        try:
+            logger.info(f"Evaluating dynamic content for form {slug} with answers for questions: {list(answers.keys())}")
+            custom_content = evaluate_dynamic_content(end_screen["dynamic_content"], answers)
+            logger.info(f"Dynamic content evaluation result: {custom_content is not None}")
+            if custom_content:
+                logger.info(f"Found matching dynamic content with title: {custom_content.get('title', 'No title')}")
+        except Exception as e:
+            logger.error(f"Error evaluating dynamic content: {str(e)}")
+            # Continue without dynamic content if there's an error
+    
+    # Prepare the response
+    end_screen_response = {
+        "title": end_screen["title"],
+        "description": end_screen.get("description", ""),
+        "custom_html": end_screen.get("custom_html")
+    }
+    
+    # Override with custom content if available
+    if custom_content:
+        if "title" in custom_content:
+            end_screen_response["title"] = custom_content["title"]
+        if "description" in custom_content:
+            end_screen_response["description"] = custom_content["description"]
+        if "custom_html" in custom_content:
+            end_screen_response["custom_html"] = custom_content["custom_html"]
     
     return {
         "success": True,
         "response_id": str(response_id),
         "message": "Form submitted successfully",
-        "end_screen": {
-            "title": dynamic_content.get("title", end_screen["title"]) if dynamic_content else end_screen["title"],
-            "description": dynamic_content.get("description", end_screen["description"]) if dynamic_content else end_screen["description"],
-            "custom_html": dynamic_content.get("custom_html", end_screen.get("custom_html")) if dynamic_content else end_screen.get("custom_html")
-        }
+        "end_screen": end_screen_response
     }
 
 @app.get("/files/{file_id}")
