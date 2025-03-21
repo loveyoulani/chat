@@ -1006,6 +1006,12 @@
         
         function createRipple(event) {
             const button = event.currentTarget;
+            
+            // Add a check to ensure button exists and has getBoundingClientRect
+            if (!button || typeof button.getBoundingClientRect !== 'function') {
+                return;
+            }
+            
             const circle = document.createElement("span");
             const diameter = Math.max(button.clientWidth, button.clientHeight);
             const radius = diameter / 2;
@@ -1025,7 +1031,9 @@
             
             // Remove ripple after animation completes
             setTimeout(() => {
-                circle.remove();
+                if (circle.parentNode === button) {
+                    circle.remove();
+                }
             }, 600);
         }
         
