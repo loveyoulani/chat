@@ -98,22 +98,10 @@ class PyObjectId(ObjectId):
 
     @classmethod
     def validate(cls, v, info=None):
-        # This handles both Pydantic v1 and v2
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
 
-    # For Pydantic v2
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type, _handler):
-        from pydantic_core import core_schema
-        return core_schema.with_info_plain_validator_function(
-            cls.validate,
-            return_schema=core_schema.str_schema(),
-            serialization=core_schema.str_serializer(),
-        )
-
-    # For Pydantic v1 (backward compatibility)
     @classmethod
     def __get_pydantic_json_schema__(cls, _schema_generator, _field_schema):
         return {"type": "string"}
