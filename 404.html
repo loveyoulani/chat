@@ -40,6 +40,7 @@
             transition: background-color 0.3s ease, color 0.3s ease;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            touch-action: pan-y;
         }
 
         .progress {
@@ -938,6 +939,8 @@
     let touchEndX = 0;
     let isSwiping = false;
     let lastSwipeTime = 0;
+    let swipeThreshold = 80; // Increased threshold for swipe detection
+    let swipeLock = false;
     
     // Extract the form slug from the URL path
     const path = window.location.pathname;
@@ -978,7 +981,7 @@
             }
         });
         
-        // Add improved touch event listeners
+        // Add improved touch event listeners with passive option
         document.addEventListener('touchstart', handleTouchStart, { passive: true });
         document.addEventListener('touchmove', handleTouchMove, { passive: true });
         document.addEventListener('touchend', handleTouchEnd, { passive: true });
@@ -996,7 +999,49 @@
                 navigateToPrevSlide(formState.currentSlide, currentIndex);
             }
         });
+
+        // Add wheel event listener for desktop scrolling
+        document.addEventListener('wheel', handleWheel, { passive: false });
     });
+    
+    // Improved wheel event handler with debounce
+    let wheelTimer = null;
+    let wheelLocked = false;
+
+    function handleWheel(event) {
+        // Don't process wheel events if we're in a loading state or don't have form data
+        if (isLoading || !formState || !formState.formData || wheelLocked) return;
+        
+        // Prevent default only if we're going to navigate
+        event.preventDefault();
+        
+        // Clear any existing timer
+        if (wheelTimer) clearTimeout(wheelTimer);
+        
+        // Debounce the wheel event
+        wheelTimer = setTimeout(() => {
+            // If wheel is locked, don't proceed
+            if (wheelLocked) return;
+            
+            // Lock the wheel to prevent rapid scrolling
+            wheelLocked = true;
+            
+            // Determine direction and navigate
+            if (event.deltaY > 50) {
+                // Scrolling down - go to next slide
+                navigateToNextSlide(formState.currentSlide);
+            } else if (event.deltaY < -50) {
+                // Scrolling up - go to previous slide
+                const currentIndex = getQuestionIndex(formState.currentSlide);
+                navigateToPrevSlide(formState.currentSlide, currentIndex);
+            }
+            
+            // Unlock after a delay
+            setTimeout(() => {
+                wheelLocked = false;
+            }, 800);
+        }, 50);
+    }
     
     function handlePrevClick() {
         if (!formState || !formState.formData) return;
@@ -1951,6 +1996,9 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
         currentSlide.style.opacity = '0';
         currentSlide.style.transform = 'translateY(-30px)';
         
+        // Lock swipe during transition
+        swipeLock = true;
+        
         // After a short delay, switch slides
         setTimeout(() => {
             // Remove active class
@@ -1963,6 +2011,7 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
             const nextSlide = document.getElementById(`slide-${slideId}`);
             if (!nextSlide) {
                 console.error(`Slide with ID slide-${slideId} not found`);
+                swipeLock = false;
                 return;
             }
             
@@ -1999,6 +2048,11 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
             
             // Scroll to top of slide
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Unlock swipe after transition completes
+            setTimeout(() => {
+                swipeLock = false;
+            }, 500);
         }, 400);
     }
     
@@ -2012,7 +2066,7 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
     }
     
     function navigateToNextSlide(currentId) {
-        if (!formFound || !formState || !formState.formData) return;
+        if (!formFound || !formState || !formState.formData || swipeLock) return;
         
         // Determine the next slide
         let nextId;
@@ -2123,7 +2177,7 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
     }
     
     function navigateToPrevSlide(currentId, currentIndex) {
-        if (!formFound || !formState || !formState.formData) return;
+        if (!formFound || !formState || !formState.formData || swipeLock) return;
         
         // Determine the previous slide
         let prevId;
@@ -2465,14 +2519,16 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
     
     // Improved touch event handlers for better swipe detection
     function handleTouchStart(event) {
+        if (swipeLock) return;
+        
         touchStartY = event.touches[0].clientY;
         touchStartX = event.touches[0].pageX;
         isSwiping = false;
     }
     
     function handleTouchMove(event) {
-        // Skip if already swiping or no touch start recorded
-        if (isSwiping || !touchStartY) return;
+        // Skip if already swiping, locked, or no touch start recorded
+        if (isSwiping || swipeLock || !touchStartY) return;
         
         const touchY = event.touches[0].clientY;
         const touchX = event.touches[0].pageX;
@@ -2481,26 +2537,30 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
         const deltaY = touchStartY - touchY;
         const deltaX = touchStartX - touchX;
         
-        // Only consider vertical swipes (ignore horizontal motion)
-        if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 30) {
+        // Only consider vertical swipes that are greater than horizontal movement
+        // This prevents accidental swipes when scrolling horizontally
+        if (Math.abs(deltaY) > Math.abs(deltaX) * 1.2 && Math.abs(deltaY) > 20) {
             isSwiping = true;
         }
     }
     
     function handleTouchEnd(event) {
-        // Skip if not swiping or no touch start recorded
-        if (!isSwiping || !touchStartY || !formState) return;
+        // Skip if not swiping, locked, or no touch start recorded
+        if (!isSwiping || swipeLock || !touchStartY || !formState) return;
         
         touchEndY = event.changedTouches[0].clientY;
         
         // Prevent rapid swipes
         const now = new Date().getTime();
-        if (now - lastSwipeTime < 500) return;
+        if (now - lastSwipeTime < 800) return;
         
         const swipeDistance = touchStartY - touchEndY;
-        const minSwipeDistance = 50; // Minimum distance required for a swipe
         
-        if (Math.abs(swipeDistance) < minSwipeDistance) return;
+        // Increased threshold for swipe detection
+        if (Math.abs(swipeDistance) < swipeThreshold) return;
+        
+        // Lock swipe to prevent multiple navigations
+        swipeLock = true;
         
         if (swipeDistance > 0) {
             // Swiped up - go to next slide
@@ -2516,6 +2576,11 @@ locationButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" h
         
         // Reset swipe state
         isSwiping = false;
+        
+        // Unlock swipe after a delay to prevent accidental double swipes
+        setTimeout(() => {
+            swipeLock = false;
+        }, 800);
     }
 </script>
 </body>
