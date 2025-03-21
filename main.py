@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, status, Request, Form, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import List, Optional, Dict, Any, Union, Annotated, ClassVar
 from pydantic import BaseModel, EmailStr, Field, validator, ConfigDict
@@ -23,6 +23,9 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import logging
 from enum import Enum
+import gridfs
+import io
+import base64
 
 # Load environment variables
 load_dotenv()
@@ -37,8 +40,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="Form Builder API",
-    description="API for creating and managing customizable forms",
-    version="1.0.0",
+    description="API for creating and managing customizable forms with advanced dynamic content and file uploads",
+    version="2.0.0",
 )
 
 # Rate limiting setup
@@ -66,11 +69,15 @@ users_collection = db.users
 forms_collection = db.forms
 responses_collection = db.responses
 templates_collection = db.templates
+fs = gridfs.GridFS(db)  # Setup GridFS for file storage
 
 # Token settings
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+
+# Maximum file size (5MB)
+MAX_FILE_SIZE = 5 * 1024 * 1024
 
 # Question types enum
 class QuestionType(str, Enum):
@@ -97,24 +104,23 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v, info=None):
+    def validate(cls, v):
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
 
     @classmethod
-    def __get_pydantic_json_schema__(cls, _schema_generator, _field_schema):
-        return {"type": "string"}
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
 
 class UserBase(BaseModel):
     email: EmailStr
     username: str
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class UserCreate(UserBase):
     password: str
@@ -133,44 +139,52 @@ class TokenData(BaseModel):
 class Option(BaseModel):
     value: str
     label: str
+    description: Optional[str] = None
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
     
 class Condition(BaseModel):
     question_id: str
     operator: str  # equals, not_equals, contains, not_contains, etc.
     value: Any
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class Action(BaseModel):
     type: str  # show, hide, jump_to, end_form, etc.
     target_id: Optional[str] = None
     value: Optional[Any] = None
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class Logic(BaseModel):
     condition: Condition
     action: Action
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+class FileMetadata(BaseModel):
+    filename: str
+    content_type: str
+    size: int
+    file_id: str  # GridFS ID
+    
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class Question(BaseModel):
     id: str
@@ -183,12 +197,13 @@ class Question(BaseModel):
     max_value: Optional[float] = None
     validation: Optional[Dict[str, Any]] = None
     logic: Optional[List[Logic]] = None
+    accept: Optional[str] = None  # For file uploads, e.g., "image/*"
+    multiple: Optional[bool] = False  # For file uploads
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
     
 class Screen(BaseModel):
     id: str
@@ -198,11 +213,10 @@ class Screen(BaseModel):
     custom_css: Optional[str] = None
     custom_html: Optional[str] = None
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class EndScreen(BaseModel):
     id: str
@@ -211,13 +225,12 @@ class EndScreen(BaseModel):
     background_image: Optional[str] = None
     custom_css: Optional[str] = None
     custom_html: Optional[str] = None
-    dynamic_content: Optional[Dict[str, Dict[str, Any]]] = None  # Question ID -> {condition -> content}
+    dynamic_content: Optional[Dict[str, Any]] = None  # Enhanced to support nested conditions
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 class FormCreate(BaseModel):
     title: str
@@ -230,11 +243,10 @@ class FormCreate(BaseModel):
     custom_slug: Optional[str] = None
     theme: Optional[Dict[str, Any]] = None
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
     
 class Form(FormCreate):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -245,19 +257,20 @@ class Form(FormCreate):
     is_active: bool = True
     response_count: int = 0
 
-class FormResponse(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+class FormResponseCreate(BaseModel):
     form_id: PyObjectId
     answers: Dict[str, Any]  # Question ID -> answer
-    created_at: datetime = Field(default_factory=datetime.now)
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+class FormResponse(FormResponseCreate):
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    created_at: datetime = Field(default_factory=datetime.now)
 
 class Template(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -267,11 +280,10 @@ class Template(BaseModel):
     form_data: Dict[str, Any]
     category: str
     
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
@@ -292,6 +304,50 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# Enhanced function to recursively evaluate nested dynamic content conditions
+def evaluate_dynamic_content(dynamic_content, answers):
+    """Recursively evaluate nested dynamic content conditions against user answers."""
+    if not dynamic_content:
+        return None
+    
+    for question_id, conditions in dynamic_content.items():
+        if question_id in answers:
+            answer = answers[question_id]
+            
+            for condition_key, content in conditions.items():
+                # Parse condition (e.g., "equals:value")
+                if ":" in condition_key:
+                    operator, expected = condition_key.split(":", 1)
+                    matches = False
+                    
+                    # String comparison for all types to ensure compatibility
+                    answer_str = str(answer)
+                    
+                    if operator == "equals" and answer_str == expected:
+                        matches = True
+                    elif operator == "not_equals" and answer_str != expected:
+                        matches = True
+                    elif operator == "contains" and expected in answer_str:
+                        matches = True
+                    elif operator == "not_contains" and expected not in answer_str:
+                        matches = True
+                    elif operator == "greater_than" and float(answer) > float(expected):
+                        matches = True
+                    elif operator == "less_than" and float(answer) < float(expected):
+                        matches = True
+                    
+                    if matches:
+                        # If content is another nested condition, recursively evaluate it
+                        if isinstance(content, dict) and any(key in answers for key in content):
+                            nested_result = evaluate_dynamic_content(content, answers)
+                            if nested_result:
+                                return nested_result
+                        else:
+                            # Otherwise return the content directly
+                            return content
+    
+    return None
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -335,7 +391,7 @@ async def register_user(request: Request, user: UserCreate):
     
     # Create new user with hashed password
     hashed_password = get_password_hash(user.password)
-    user_dict = user.dict()
+    user_dict = user.dict(by_alias=True)
     user_dict.pop("password")
     user_dict["hashed_password"] = hashed_password
     user_dict["created_at"] = datetime.now()
@@ -384,7 +440,7 @@ async def create_form(
         )
     
     # Create new form
-    form_dict = form_data.dict()
+    form_dict = form_data.dict(by_alias=True)
     form_dict["creator_id"] = current_user.id
     form_dict["created_at"] = datetime.now()
     form_dict["updated_at"] = datetime.now()
@@ -496,6 +552,45 @@ async def submit_form_response(
             detail="This form has expired"
         )
     
+    # Process file uploads in the answers
+    for question_id, answer in list(answers.items()):  # Use list to allow modification during iteration
+        question = next((q for q in form["questions"] if q["id"] == question_id), None)
+        if question and question["type"] == "file" and isinstance(answer, dict) and "data" in answer:
+            try:
+                # Process base64 encoded file data
+                file_data = answer.get("data", "").split(",")[-1]  # Remove data URL prefix if present
+                file_content = base64.b64decode(file_data)
+                file_name = answer.get("name", "uploaded_file")
+                content_type = answer.get("type", "application/octet-stream")
+                
+                # Check file size
+                if len(file_content) > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"File {file_name} exceeds maximum size of 5MB"
+                    )
+                
+                # Store file in GridFS
+                file_id = fs.put(
+                    file_content,
+                    filename=file_name,
+                    content_type=content_type
+                )
+                
+                # Replace file data with metadata
+                answers[question_id] = {
+                    "filename": file_name,
+                    "content_type": content_type,
+                    "size": len(file_content),
+                    "file_id": str(file_id)
+                }
+            except Exception as e:
+                logger.error(f"Error processing file upload: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Error processing file upload: {str(e)}"
+                )
+    
     # Validate required questions
     for question in form["questions"]:
         if question["required"] and question["id"] not in answers:
@@ -524,39 +619,48 @@ async def submit_form_response(
     
     # Determine the appropriate end screen content based on answers
     end_screen = form["end_screen"]
-    dynamic_content = None
     
+    # Use the enhanced dynamic content evaluation function
+    dynamic_content = None
     if end_screen.get("dynamic_content"):
-        for question_id, conditions in end_screen["dynamic_content"].items():
-            if question_id in answers:
-                answer = answers[question_id]
-                for condition_key, content in conditions.items():
-                    # Parse condition (e.g., "equals:value", "contains:text")
-                    cond_parts = condition_key.split(":")
-                    if len(cond_parts) == 2:
-                        operator, expected = cond_parts
-                        
-                        if (
-                            (operator == "equals" and str(answer) == expected) or
-                            (operator == "not_equals" and str(answer) != expected) or
-                            (operator == "contains" and expected in str(answer)) or
-                            (operator == "not_contains" and expected not in str(answer)) or
-                            (operator == "greater_than" and float(answer) > float(expected)) or
-                            (operator == "less_than" and float(answer) < float(expected))
-                        ):
-                            dynamic_content = content
-                            break
-        
+        dynamic_content = evaluate_dynamic_content(end_screen["dynamic_content"], answers)
+    
     return {
         "success": True,
         "response_id": str(response_id),
         "message": "Form submitted successfully",
         "end_screen": {
-            "title": end_screen["title"],
-            "description": end_screen["description"],
-            "dynamic_content": dynamic_content
+            "title": dynamic_content.get("title", end_screen["title"]) if dynamic_content else end_screen["title"],
+            "description": dynamic_content.get("description", end_screen["description"]) if dynamic_content else end_screen["description"],
+            "custom_html": dynamic_content.get("custom_html", end_screen.get("custom_html")) if dynamic_content else end_screen.get("custom_html")
         }
     }
+
+@app.get("/files/{file_id}")
+@limiter.limit("120/minute")
+async def get_file(request: Request, file_id: str):
+    if not ObjectId.is_valid(file_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file ID format"
+        )
+    
+    # Check if file exists in GridFS
+    if not fs.exists(ObjectId(file_id)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found"
+        )
+    
+    # Retrieve file from GridFS
+    grid_out = fs.get(ObjectId(file_id))
+    
+    # Create a streaming response
+    return StreamingResponse(
+        io.BytesIO(grid_out.read()),
+        media_type=grid_out.content_type,
+        headers={"Content-Disposition": f"attachment; filename={grid_out.filename}"}
+    )
 
 @app.put("/forms/{form_id}", response_model=Form)
 @limiter.limit("30/minute")
@@ -595,7 +699,7 @@ async def update_form(
             )
     
     # Update form
-    form_dict = form_data.dict()
+    form_dict = form_data.dict(by_alias=True)
     form_dict["updated_at"] = datetime.now()
     
     # Keep the original slug if no custom slug provided
@@ -638,6 +742,19 @@ async def delete_form(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this form"
         )
+    
+    # Find all file uploads in responses to this form
+    responses = responses_collection.find({"form_id": ObjectId(form_id)})
+    for response in responses:
+        for question_id, answer in response.get("answers", {}).items():
+            if isinstance(answer, dict) and "file_id" in answer:
+                try:
+                    # Delete file from GridFS
+                    file_id = answer["file_id"]
+                    if ObjectId.is_valid(file_id) and fs.exists(ObjectId(file_id)):
+                        fs.delete(ObjectId(file_id))
+                except Exception as e:
+                    logger.error(f"Error deleting file {file_id}: {str(e)}")
     
     # Delete form
     forms_collection.delete_one({"_id": ObjectId(form_id)})
@@ -865,7 +982,7 @@ async def get_form_stats(
             # For choice-based questions, count occurrences of each option
             option_counts = list(responses_collection.aggregate([
                 {"$match": {"form_id": ObjectId(form_id)}},
-                {"$unwind": f"$answers.{question_id}"},
+                {"$unwind": {"path": f"$answers.{question_id}", "preserveNullAndEmptyArrays": True}},
                 {
                     "$group": {
                         "_id": f"$answers.{question_id}",
@@ -876,7 +993,7 @@ async def get_form_stats(
             question_stats[question_id] = {
                 "type": question_type,
                 "title": question["title"],
-                "option_counts": {item["_id"]: item["count"] for item in option_counts}
+                "option_counts": {str(item["_id"]): item["count"] for item in option_counts}
             }
         elif question_type in [QuestionType.RATING, QuestionType.SCALE, QuestionType.NUMBER]:
             # For numeric questions, calculate average and distribution
@@ -915,6 +1032,30 @@ async def get_form_stats(
                 })
             stats_data["distribution"] = {str(item["_id"]): item["count"] for item in value_distribution}
             question_stats[question_id] = stats_data
+        elif question_type == QuestionType.FILE:
+            # For file uploads, count number of files and get statistics
+            file_stats = list(responses_collection.aggregate([
+                {"$match": {"form_id": ObjectId(form_id)}},
+                {"$match": {f"answers.{question_id}.file_id": {"$exists": True}}},
+                {"$count": "file_count"}
+            ]))
+            
+            file_count = file_stats[0]["file_count"] if file_stats else 0
+            
+            # Get sample file metadata (limit to 5)
+            sample_files = list(responses_collection.aggregate([
+                {"$match": {"form_id": ObjectId(form_id)}},
+                {"$match": {f"answers.{question_id}.file_id": {"$exists": True}}},
+                {"$project": {"file_metadata": f"$answers.{question_id}"}},
+                {"$limit": 5}
+            ]))
+            
+            question_stats[question_id] = {
+                "type": question_type,
+                "title": question["title"],
+                "file_count": file_count,
+                "sample_files": [item["file_metadata"] for item in sample_files]
+            }
         else:
             # For text-based questions, count responses and get sample answers
             text_stats = list(responses_collection.aggregate([
@@ -940,15 +1081,12 @@ async def get_form_stats(
             }
     
     # Completion rate statistics
-    total_responses = responses_collection.count_documents({"form_id": ObjectId(form_id)})
+    total_starts = responses_collection.count_documents({"form_id": ObjectId(form_id)})
     completion_stats = {
-        "started": total_responses,
-        "completed": total_responses,  # Assuming all submitted forms are complete
-        "completion_rate": 100.0 if total_responses > 0 else 0.0
+        "started": total_starts,
+        "completed": response_count,  # Assuming all submitted forms are complete
+        "completion_rate": (response_count / total_starts * 100) if total_starts > 0 else 0.0
     }
-    
-    # Get average completion time if available
-    # Note: This would require tracking start and end times for each response
     
     return {
         "form_id": form_id,
@@ -1008,6 +1146,21 @@ async def create_form_from_template(
     created_form = forms_collection.find_one({"_id": result.inserted_id})
     
     return Form(**created_form)
+
+@app.post("/templates", response_model=Template)
+@limiter.limit("30/minute")
+async def create_template(
+    request: Request,
+    template_data: Template,
+    current_user: User = Depends(get_current_user)
+):
+    # Create a new template
+    template_dict = template_data.dict(by_alias=True, exclude={"id"})
+    
+    result = templates_collection.insert_one(template_dict)
+    created_template = templates_collection.find_one({"_id": result.inserted_id})
+    
+    return Template(**created_template)
 
 # Background task to keep the server alive on Render's free tier
 @app.on_event("startup")
@@ -1141,65 +1294,105 @@ async def startup_event():
                 }
             },
             {
-                "title": "Job Application",
-                "description": "Collect applications for open positions",
-                "category": "recruitment",
+                "title": "Personality Assessment",
+                "description": "Create a personality test with personalized results",
+                "category": "psychology",
                 "form_data": {
-                    "title": "Job Application Form",
-                    "description": "Apply for open positions at our company",
+                    "title": "Personality Assessment",
+                    "description": "Discover your personality traits based on your responses",
                     "start_screen": {
                         "id": "start",
-                        "title": "Job Application",
-                        "description": "Thank you for your interest in joining our team. Please complete this application form."
+                        "title": "Discover Your Personality Type",
+                        "description": "Answer these questions honestly to receive your personalized personality profile."
                     },
                     "questions": [
                         {
-                            "id": "name",
-                            "type": "text",
-                            "title": "Full Name",
-                            "required": True
-                        },
-                        {
-                            "id": "email",
-                            "type": "email",
-                            "title": "Email Address",
-                            "required": True
-                        },
-                        {
-                            "id": "phone",
-                            "type": "phone",
-                            "title": "Phone Number",
-                            "required": True
-                        },
-                        {
-                            "id": "position",
-                            "type": "dropdown",
-                            "title": "Position Applying For",
+                            "id": "social_energy",
+                            "type": "multiple_choice",
+                            "title": "How do you recharge your energy?",
+                            "description": "Think about what truly restores you when depleted.",
                             "required": True,
                             "options": [
-                                {"value": "developer", "label": "Software Developer"},
-                                {"value": "designer", "label": "UI/UX Designer"},
-                                {"value": "manager", "label": "Project Manager"},
-                                {"value": "marketing", "label": "Marketing Specialist"}
+                                {"value": "E", "label": "Being around people energizes me", "description": "Social gatherings leave me feeling refreshed"},
+                                {"value": "I", "label": "I need alone time to recharge", "description": "Social interactions can drain me after a while"}
                             ]
                         },
                         {
-                            "id": "experience",
-                            "type": "paragraph",
-                            "title": "Describe your relevant experience",
-                            "required": True
+                            "id": "information_processing",
+                            "type": "multiple_choice",
+                            "title": "When solving problems, do you prefer to:",
+                            "description": "Your approach to gathering and processing information.",
+                            "required": True,
+                            "options": [
+                                {"value": "S", "label": "Focus on concrete facts and details", "description": "You trust what's practical and observable"},
+                                {"value": "N", "label": "Consider patterns and possibilities", "description": "You look for the bigger picture and connections"}
+                            ]
                         },
                         {
-                            "id": "start_date",
-                            "type": "date",
-                            "title": "When can you start?",
-                            "required": True
+                            "id": "decision_making",
+                            "type": "multiple_choice",
+                            "title": "When making important decisions, you primarily consider:",
+                            "description": "Your basis for making choices.",
+                            "required": True,
+                            "options": [
+                                {"value": "T", "label": "Logic and objective analysis", "description": "You prioritize what makes the most logical sense"},
+                                {"value": "F", "label": "Values and impact on people", "description": "You consider how choices affect people's feelings"}
+                            ]
+                        },
+                        {
+                            "id": "lifestyle_preference",
+                            "type": "multiple_choice",
+                            "title": "How do you prefer to organize your life?",
+                            "description": "Your approach to structure and planning.",
+                            "required": True,
+                            "options": [
+                                {"value": "J", "label": "With structure, plans and schedules", "description": "You like clear expectations and timelines"},
+                                {"value": "P", "label": "With flexibility and spontaneity", "description": "You prefer keeping options open"}
+                            ]
                         }
                     ],
                     "end_screen": {
                         "id": "end",
-                        "title": "Application Submitted",
-                        "description": "Thank you for your application. We'll review it and contact you if there's a match."
+                        "title": "Your Personality Analysis",
+                        "description": "Based on your responses, we've analyzed your personality type.",
+                        "dynamic_content": {
+                            "social_energy": {
+                                "equals:I": {
+                                    "information_processing": {
+                                        "equals:S": {
+                                            "decision_making": {
+                                                "equals:T": {
+                                                    "lifestyle_preference": {
+                                                        "equals:J": {
+                                                            "title": "ISTJ - The Inspector",
+                                                            "description": "You're practical, detail-oriented, and reliable. ISTJs are responsible organizers who value tradition and security."
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "social_energy": {
+                                "equals:E": {
+                                    "information_processing": {
+                                        "equals:N": {
+                                            "decision_making": {
+                                                "equals:F": {
+                                                    "lifestyle_preference": {
+                                                        "equals:P": {
+                                                            "title": "ENFP - The Champion",
+                                                            "description": "You're enthusiastic, creative, and people-oriented. ENFPs are charismatic innovators who value possibilities and connections with others."
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
