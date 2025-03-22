@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/responses.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -75,7 +76,8 @@
             </header>
 
             <div class="dashboard-content">
-                <div class="responses-header">
+                <!-- Overview Analytics -->
+                <div class="analytics-section">
                     <div class="responses-stats">
                         <div class="stat-card">
                             <div class="stat-value" id="total-responses">0</div>
@@ -90,6 +92,37 @@
                             <div class="stat-label">Avg. Completion Time</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Visualization Section -->
+                <div class="visualization-section">
+                    <!-- Time-based chart container -->
+                    <div class="chart-container time-chart-container">
+                        <h3>Responses Over Time</h3>
+                        <canvas id="responses-chart"></canvas>
+                    </div>
+
+                    <!-- Swipable charts for questions -->
+                    <div class="chart-navigation">
+                        <button class="chart-nav prev" id="chart-prev">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        <div class="charts-wrapper" id="charts-wrapper">
+                            <!-- Question charts will be added here dynamically -->
+                        </div>
+                        <button class="chart-nav next" id="chart-next">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Chart indicators -->
+                    <div class="chart-indicators" id="chart-indicators">
+                        <!-- Indicators will be added dynamically -->
+                    </div>
+                </div>
+
+                <!-- Filters and View Options -->
+                <div class="responses-header">
                     <div class="responses-filters">
                         <div class="filter-group">
                             <label>Date Range:</label>
@@ -111,6 +144,7 @@
                     </div>
                 </div>
 
+                <!-- Table View -->
                 <div id="responses-table-view">
                     <div class="table-container">
                         <table class="responses-table" id="responses-table">
@@ -138,6 +172,7 @@
                     </div>
                 </div>
                 
+                <!-- Individual View -->
                 <div id="individual-view" class="individual-view">
                     <div class="response-navigation">
                         <button id="prev-response" class="nav-btn" disabled>
@@ -269,6 +304,14 @@
             </div>
         </div>
     </div>
+
+    <!-- Loading indicator -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Notification system -->
+    <div class="notification-container" id="notification-container"></div>
 
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
