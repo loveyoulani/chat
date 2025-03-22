@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", async function() {
             expiration_date: null,
             custom_slug: null,
             theme: {
-                primary_color: "#000000",
+                primary_color: "#3B82F6",
                 background_color: "#ffffff",
                 text_color: "#333333",
                 font_family: "Inter, sans-serif",
@@ -43,7 +43,8 @@ document.addEventListener("DOMContentLoaded", async function() {
         currentSection: "start-screen",
         editingQuestion: null,
         editingQuestionIndex: -1,
-        questionCounter: 0
+        questionCounter: 0,
+        fileUploads: {}
     };
     
     // Set up event listeners
@@ -55,6 +56,8 @@ document.addEventListener("DOMContentLoaded", async function() {
     
     if (formId) {
         try {
+            showLoadingIndicator();
+            
             // Fetch form data
             const response = await fetch(`${API_URL}/forms/${formId}`, {
                 headers: {
@@ -101,6 +104,16 @@ document.addEventListener("DOMContentLoaded", async function() {
                 document.getElementById("custom-slug").value = formData.custom_slug;
             }
             
+            // Set theme
+            if (formData.theme && formData.theme.name) {
+                document.querySelectorAll(".theme-option").forEach(option => {
+                    option.classList.remove("active");
+                    if (option.dataset.theme === formData.theme.name) {
+                        option.classList.add("active");
+                    }
+                });
+            }
+            
             // Set dynamic content toggle
             if (formData.end_screen.dynamic_content) {
                 document.getElementById("enable-dynamic-content").checked = true;
@@ -123,9 +136,11 @@ document.addEventListener("DOMContentLoaded", async function() {
                 window.formBuilderState.questionCounter = formData.questions.length;
             }
             
+            hideLoadingIndicator();
         } catch (error) {
+            hideLoadingIndicator();
             console.error("Error loading form:", error);
-            alert("Failed to load form. Please try again.");
+            showNotification("Failed to load form. Please try again.", "error");
         }
     }
 });
@@ -255,19 +270,19 @@ function setupEventListeners() {
             // Set theme colors
             switch (theme) {
                 case "dark":
-                    window.formBuilderState.form.theme.primary_color = "#ffffff";
-                    window.formBuilderState.form.theme.background_color = "#222222";
-                    window.formBuilderState.form.theme.text_color = "#ffffff";
+                    window.formBuilderState.form.theme.primary_color = "#60A5FA";
+                    window.formBuilderState.form.theme.background_color = "#1F2937";
+                    window.formBuilderState.form.theme.text_color = "#F9FAFB";
                     break;
                 case "colorful":
-                    window.formBuilderState.form.theme.primary_color = "#3498db";
-                    window.formBuilderState.form.theme.background_color = "#f9f9f9";
-                    window.formBuilderState.form.theme.text_color = "#333333";
+                    window.formBuilderState.form.theme.primary_color = "#8B5CF6";
+                    window.formBuilderState.form.theme.background_color = "#F5F3FF";
+                    window.formBuilderState.form.theme.text_color = "#4B5563";
                     break;
                 default: // light
-                    window.formBuilderState.form.theme.primary_color = "#000000";
-                    window.formBuilderState.form.theme.background_color = "#ffffff";
-                    window.formBuilderState.form.theme.text_color = "#333333";
+                    window.formBuilderState.form.theme.primary_color = "#3B82F6";
+                    window.formBuilderState.form.theme.background_color = "#FFFFFF";
+                    window.formBuilderState.form.theme.text_color = "#1F2937";
                     break;
             }
         });
@@ -361,7 +376,9 @@ function addNewQuestion(type) {
         min_value: null,
         max_value: null,
         validation: null,
-        logic: null
+        logic: null,
+        accept: null,
+        multiple: false
     };
     
     // Add default options for choice-based questions
@@ -384,6 +401,12 @@ function addNewQuestion(type) {
         }
     }
     
+    // Add file upload defaults
+    if (type === "file") {
+        question.accept = ".pdf,.jpg,.jpeg,.png,.doc,.docx";
+        question.multiple = false;
+    }
+    
     // Add question to state
     window.formBuilderState.form.questions.push(question);
     
@@ -398,7 +421,7 @@ function renderQuestion(question, index) {
     const questionsContainer = document.getElementById("questions-container");
     
     // Remove empty state if this is the first question
-    if (index === 0) {
+    if (questionsContainer.querySelector(".empty-state")) {
         questionsContainer.innerHTML = "";
     }
     
@@ -423,11 +446,14 @@ function renderQuestion(question, index) {
         .replace(/{{preview-content}}/g, previewContent);
     
     questionElement.innerHTML = questionHtml;
-    questionElement.querySelector(".question-item").dataset.index = index;
-    questionElement.querySelector(".question-item").dataset.id = question.id;
+    
+    const questionItemElement = questionElement.querySelector(".question-item");
+    questionItemElement.dataset.index = index;
+    questionItemElement.dataset.id = question.id;
+    questionItemElement.dataset.type = question.type;
     
     // Set required toggle state
-    const requiredCheckbox = questionElement.querySelector(".required-checkbox");
+    const requiredCheckbox = questionItemElement.querySelector(".required-checkbox");
     if (requiredCheckbox) {
         requiredCheckbox.checked = question.required;
         requiredCheckbox.addEventListener("change", function() {
@@ -436,27 +462,74 @@ function renderQuestion(question, index) {
     }
     
     // Add event listeners for actions
-    questionElement.querySelector(".btn-edit").addEventListener("click", function() {
+    questionItemElement.querySelector(".btn-edit").addEventListener("click", function() {
         editQuestion(question.id, index);
     });
     
-    questionElement.querySelector(".btn-duplicate").addEventListener("click", function() {
+    questionItemElement.querySelector(".btn-duplicate").addEventListener("click", function() {
         duplicateQuestion(question.id, index);
     });
     
-    questionElement.querySelector(".btn-delete").addEventListener("click", function() {
+    questionItemElement.querySelector(".btn-delete").addEventListener("click", function() {
         deleteQuestion(question.id, index);
     });
     
-    questionElement.querySelector(".btn-logic").addEventListener("click", function() {
+    questionItemElement.querySelector(".btn-logic").addEventListener("click", function() {
         openLogicModal(question.id, index);
     });
     
-    // Append to container
-    questionsContainer.appendChild(questionElement.firstElementChild);
+    // Add drag functionality for reordering
+    questionItemElement.setAttribute("draggable", "true");
     
-    // Make questions sortable
-    makeQuestionsSortable();
+    questionItemElement.addEventListener("dragstart", function(e) {
+        e.dataTransfer.setData("text/plain", index);
+        this.classList.add("dragging");
+    });
+    
+    questionItemElement.addEventListener("dragend", function() {
+        this.classList.remove("dragging");
+        document.querySelectorAll(".question-item").forEach(item => {
+            item.classList.remove("drag-over");
+        });
+    });
+    
+    questionItemElement.addEventListener("dragover", function(e) {
+        e.preventDefault();
+        this.classList.add("drag-over");
+    });
+    
+    questionItemElement.addEventListener("dragleave", function() {
+        this.classList.remove("drag-over");
+    });
+    
+    questionItemElement.addEventListener("drop", function(e) {
+        e.preventDefault();
+        const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"));
+        const targetIndex = parseInt(this.dataset.index);
+        
+        if (sourceIndex !== targetIndex) {
+            // Move question in array
+            const questions = window.formBuilderState.form.questions;
+            const questionToMove = questions[sourceIndex];
+            
+            // Remove from original position
+            questions.splice(sourceIndex, 1);
+            
+            // Insert at new position
+            questions.splice(targetIndex, 0, questionToMove);
+            
+            // Re-render all questions
+            questionsContainer.innerHTML = "";
+            questions.forEach((q, i) => {
+                renderQuestion(q, i);
+            });
+        }
+        
+        this.classList.remove("drag-over");
+    });
+    
+    // Append to container
+    questionsContainer.appendChild(questionItemElement);
 }
 
 function getQuestionTypeIcon(type) {
@@ -537,785 +610,889 @@ function getQuestionPreviewContent(question) {
             }
             previewContent += '</div>';
             break;
-            case 'scale':
-                previewContent = '<div class="preview-scale">';
-                previewContent += '<input type="range" class="preview-range" disabled>';
-                previewContent += '</div>';
-                break;
-            case 'email':
-                previewContent = '<input type="email" class="preview-input" placeholder="Email address" disabled>';
-                break;
-            case 'phone':
-                previewContent = '<input type="tel" class="preview-input" placeholder="Phone number" disabled>';
-                break;
-            case 'number':
-                previewContent = '<input type="number" class="preview-input" placeholder="Number" disabled>';
-                break;
-            case 'date':
-                previewContent = '<input type="date" class="preview-input" disabled>';
-                break;
-            case 'time':
-                previewContent = '<input type="time" class="preview-input" disabled>';
-                break;
-            case 'url':
-                previewContent = '<input type="url" class="preview-input" placeholder="Website URL" disabled>';
-                break;
-            case 'location':
-                previewContent = '<div class="preview-location">';
-                previewContent += '<input type="text" class="preview-input" placeholder="Enter location" disabled>';
-                previewContent += '<button class="preview-location-btn" disabled>Use Current Location</button>';
-                previewContent += '</div>';
-                break;
-            case 'file':
-                previewContent = '<div class="preview-file">';
-                previewContent += '<button class="preview-file-btn" disabled>Upload File</button>';
-                previewContent += '</div>';
-                break;
-            default:
-                previewContent = '<input type="text" class="preview-input" placeholder="Answer" disabled>';
+        case 'scale':
+            previewContent = '<div class="preview-scale">';
+            previewContent += '<input type="range" class="preview-range" disabled>';
+            previewContent += '</div>';
+            break;
+        case 'email':
+            previewContent = '<input type="email" class="preview-input" placeholder="Email address" disabled>';
+            break;
+        case 'phone':
+            previewContent = '<input type="tel" class="preview-input" placeholder="Phone number" disabled>';
+            break;
+        case 'number':
+            previewContent = '<input type="number" class="preview-input" placeholder="Number" disabled>';
+            break;
+        case 'date':
+            previewContent = '<input type="date" class="preview-input" disabled>';
+            break;
+        case 'time':
+            previewContent = '<input type="time" class="preview-input" disabled>';
+            break;
+        case 'url':
+            previewContent = '<input type="url" class="preview-input" placeholder="Website URL" disabled>';
+            break;
+        case 'location':
+            previewContent = '<div class="preview-location">';
+            previewContent += '<input type="text" class="preview-input" placeholder="Enter location" disabled>';
+            previewContent += '<button class="preview-location-btn" disabled>Use Current Location</button>';
+            previewContent += '</div>';
+            break;
+        case 'file':
+            previewContent = '<div class="preview-file">';
+            previewContent += `<button class="preview-file-btn" disabled>Upload File${question.multiple ? 's' : ''}</button>`;
+            if (question.accept) {
+                previewContent += `<div class="file-formats">${formatAcceptTypes(question.accept)}</div>`;
+            }
+            previewContent += '</div>';
+            break;
+        default:
+            previewContent = '<input type="text" class="preview-input" placeholder="Answer" disabled>';
+    }
+    
+    return previewContent;
+}
+
+function formatAcceptTypes(accept) {
+    if (!accept) return '';
+    
+    const types = accept.split(',').map(type => {
+        // Remove the dot if present
+        type = type.trim();
+        if (type.startsWith('.')) {
+            return type.substring(1).toUpperCase();
         }
-        
-        return previewContent;
+        return type.toUpperCase();
+    });
+    
+    return `Accepted formats: ${types.join(', ')}`;
+}
+
+function editQuestion(questionId, index) {
+    const question = window.formBuilderState.form.questions[index];
+    if (!question) return;
+    
+    // Store the question being edited
+    window.formBuilderState.editingQuestion = JSON.parse(JSON.stringify(question)); // Deep clone
+    window.formBuilderState.editingQuestionIndex = index;
+    
+    // Open edit modal
+    const modal = document.getElementById("question-edit-modal");
+    if (!modal) return;
+    
+    // Fill in form fields
+    document.getElementById("edit-question-title").value = question.title;
+    document.getElementById("edit-question-description").value = question.description || "";
+    document.getElementById("edit-question-required").checked = question.required;
+    
+    // Render type-specific options
+    renderQuestionOptions(question);
+    
+    // Show modal
+    modal.classList.add("active");
+}
+
+function renderQuestionOptions(question) {
+    const optionsContainer = document.getElementById("edit-question-options");
+    if (!optionsContainer) return;
+    
+    // Clear previous content
+    optionsContainer.innerHTML = "";
+    
+    switch (question.type) {
+        case 'multiple_choice':
+        case 'checkbox':
+        case 'dropdown':
+            renderChoiceOptions(question, optionsContainer);
+            break;
+        case 'rating':
+        case 'scale':
+            renderScaleOptions(question, optionsContainer);
+            break;
+        case 'number':
+            renderNumberOptions(question, optionsContainer);
+            break;
+        case 'file':
+            renderFileOptions(question, optionsContainer);
+            break;
+        // Other types don't need special options
+    }
+}
+
+function renderChoiceOptions(question, container) {
+    // Ensure options array exists
+    if (!question.options) {
+        question.options = [];
     }
     
-    function editQuestion(questionId, index) {
-        const question = window.formBuilderState.form.questions[index];
-        if (!question) return;
-        
-        // Store the question being edited
-        window.formBuilderState.editingQuestion = question;
-        window.formBuilderState.editingQuestionIndex = index;
-        
-        // Open edit modal
-        const modal = document.getElementById("question-edit-modal");
-        if (!modal) return;
-        
-        // Fill in form fields
-        document.getElementById("edit-question-title").value = question.title;
-        document.getElementById("edit-question-description").value = question.description || "";
-        document.getElementById("edit-question-required").checked = question.required;
-        
-        // Render type-specific options
-        renderQuestionOptions(question);
-        
-        // Show modal
-        modal.classList.add("active");
-    }
+    // Create options container
+    const optionsWrapper = document.createElement("div");
+    optionsWrapper.className = "options-wrapper";
     
-    function renderQuestionOptions(question) {
-        const optionsContainer = document.getElementById("edit-question-options");
-        if (!optionsContainer) return;
-        
-        optionsContainer.innerHTML = "";
-        
-        switch (question.type) {
-            case 'multiple_choice':
-            case 'checkbox':
-            case 'dropdown':
-                renderChoiceOptions(question, optionsContainer);
-                break;
-            case 'rating':
-            case 'scale':
-                renderScaleOptions(question, optionsContainer);
-                break;
-            case 'number':
-                renderNumberOptions(question, optionsContainer);
-                break;
-            case 'file':
-                renderFileOptions(question, optionsContainer);
-                break;
-            // Other types don't need special options
-        }
-    }
+    // Add label
+    const label = document.createElement("label");
+    label.textContent = "Options";
+    optionsWrapper.appendChild(label);
     
-    function renderChoiceOptions(question, container) {
-        const options = question.options || [];
+    // Add options list
+    const optionsList = document.createElement("div");
+    optionsList.className = "options-list";
+    optionsList.id = "options-list";
+    
+    // Render existing options
+    question.options.forEach((option, index) => {
+        const optionItem = document.createElement("div");
+        optionItem.className = "option-item";
+        optionItem.dataset.index = index;
         
-        // Create options container
-        const optionsWrapper = document.createElement("div");
-        optionsWrapper.className = "options-wrapper";
-        
-        // Add label
-        const label = document.createElement("label");
-        label.textContent = "Options";
-        optionsWrapper.appendChild(label);
-        
-        // Add options list
-        const optionsList = document.createElement("div");
-        optionsList.className = "options-list";
-        optionsList.id = "options-list";
-        
-        options.forEach((option, index) => {
-            const optionItem = document.createElement("div");
-            optionItem.className = "option-item";
-            
-            optionItem.innerHTML = `
-                <input type="text" class="option-label" value="${option.label}" placeholder="Option label">
-                <button type="button" class="btn-small btn-outline btn-delete-option" data-index="${index}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            `;
-            
-            optionsList.appendChild(optionItem);
-        });
-        
-        optionsWrapper.appendChild(optionsList);
-        
-        // Add "Add Option" button
-        const addOptionBtn = document.createElement("button");
-        addOptionBtn.type = "button";
-        addOptionBtn.className = "btn btn-outline";
-        addOptionBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Option
+        optionItem.innerHTML = `
+            <div class="drag-handle">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1"></circle><circle cx="8" cy="16" r="1"></circle><circle cx="16" cy="8" r="1"></circle><circle cx="16" cy="16" r="1"></circle></svg>
+            </div>
+            <input type="text" class="option-label" value="${option.label}" placeholder="Option label">
+            <button type="button" class="btn-delete-option" data-index="${index}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
         `;
         
-        // Add event listener for adding options
-        addOptionBtn.addEventListener("click", function() {
-            const newOption = { value: `option${Date.now()}`, label: "New Option" };
-            question.options.push(newOption);
+        optionsList.appendChild(optionItem);
+    });
+    
+    optionsWrapper.appendChild(optionsList);
+    
+    // Add "Add Option" button
+    const addOptionBtn = document.createElement("button");
+    addOptionBtn.type = "button";
+    addOptionBtn.className = "btn btn-outline";
+    addOptionBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Option
+    `;
+    
+    // Add event listener for adding options
+    addOptionBtn.addEventListener("click", function() {
+        const newOption = { 
+            value: `option${Date.now()}`, 
+            label: "New Option" 
+        };
+        
+        // Add to the question being edited (not the original question)
+        window.formBuilderState.editingQuestion.options.push(newOption);
+        
+        // Re-render options
+        renderChoiceOptions(window.formBuilderState.editingQuestion, container);
+    });
+    
+    optionsWrapper.appendChild(addOptionBtn);
+    
+    // Add event delegation for option deletion
+    optionsList.addEventListener("click", function(e) {
+        const deleteButton = e.target.closest('.btn-delete-option');
+        if (deleteButton) {
+            e.stopPropagation();
+            const index = parseInt(deleteButton.dataset.index);
             
-            // Re-render options
-            renderChoiceOptions(question, container);
-        });
-        
-        optionsWrapper.appendChild(addOptionBtn);
-        
-        // Add event delegation for option deletion
-        optionsList.addEventListener("click", function(e) {
-            const deleteButton = e.target.closest('.btn-delete-option');
-            if (deleteButton) {
-                e.stopPropagation();
-                const index = parseInt(deleteButton.dataset.index);
-                if (!isNaN(index) && index >= 0 && index < question.options.length) {
-                    question.options.splice(index, 1);
-                    // Re-render options
-                    renderChoiceOptions(question, container);
-                }
-            }
-        });
-        
-        // Add event delegation for option label changes
-        optionsList.addEventListener("input", function(e) {
-            if (e.target.classList.contains("option-label")) {
-                const optionItem = e.target.closest(".option-item");
-                const index = Array.from(optionItem.parentNode.children).indexOf(optionItem);
+            if (!isNaN(index) && index >= 0 && index < window.formBuilderState.editingQuestion.options.length) {
+                // Remove from the editing question
+                window.formBuilderState.editingQuestion.options.splice(index, 1);
                 
-                if (index !== -1 && question.options[index]) {
-                    question.options[index].label = e.target.value;
-                }
+                // Re-render options
+                renderChoiceOptions(window.formBuilderState.editingQuestion, container);
             }
-        });
-        
-        container.appendChild(optionsWrapper);
-    }
+        }
+    });
     
-    function renderScaleOptions(question, container) {
-        const scaleWrapper = document.createElement("div");
-        scaleWrapper.className = "scale-options";
-        
-        // Min value
-        const minGroup = document.createElement("div");
-        minGroup.className = "form-group";
-        
-        const minLabel = document.createElement("label");
-        minLabel.textContent = "Minimum Value";
-        minGroup.appendChild(minLabel);
-        
-        const minInput = document.createElement("input");
-        minInput.type = "number";
-        minInput.value = question.min_value || (question.type === 'rating' ? 1 : 0);
-        minInput.addEventListener("input", function() {
-            question.min_value = parseInt(this.value);
-        });
-        minGroup.appendChild(minInput);
-        
-        scaleWrapper.appendChild(minGroup);
-        
-        // Max value
-        const maxGroup = document.createElement("div");
-        maxGroup.className = "form-group";
-        
-        const maxLabel = document.createElement("label");
-        maxLabel.textContent = "Maximum Value";
-        maxGroup.appendChild(maxLabel);
-        
-        const maxInput = document.createElement("input");
-        maxInput.type = "number";
-        maxInput.value = question.max_value || (question.type === 'rating' ? 5 : 10);
-        maxInput.addEventListener("input", function() {
-            question.max_value = parseInt(this.value);
-        });
-        maxGroup.appendChild(maxInput);
-        
-        scaleWrapper.appendChild(maxGroup);
-        
-        container.appendChild(scaleWrapper);
-    }
-    
-    function renderNumberOptions(question, container) {
-        const numberWrapper = document.createElement("div");
-        numberWrapper.className = "number-options";
-        
-        // Min value
-        const minGroup = document.createElement("div");
-        minGroup.className = "form-group";
-        
-        const minLabel = document.createElement("label");
-        minLabel.textContent = "Minimum Value (optional)";
-        minGroup.appendChild(minLabel);
-        
-        const minInput = document.createElement("input");
-        minInput.type = "number";
-        minInput.value = question.min_value || "";
-        minInput.addEventListener("input", function() {
-            question.min_value = this.value ? parseInt(this.value) : null;
-        });
-        minGroup.appendChild(minInput);
-        
-        numberWrapper.appendChild(minGroup);
-        
-        // Max value
-        const maxGroup = document.createElement("div");
-        maxGroup.className = "form-group";
-        
-        const maxLabel = document.createElement("label");
-        maxLabel.textContent = "Maximum Value (optional)";
-        maxGroup.appendChild(maxLabel);
-        
-        const maxInput = document.createElement("input");
-        maxInput.type = "number";
-        maxInput.value = question.max_value || "";
-        maxInput.addEventListener("input", function() {
-            question.max_value = this.value ? parseInt(this.value) : null;
-        });
-        maxGroup.appendChild(maxInput);
-        
-        numberWrapper.appendChild(maxGroup);
-        
-        container.appendChild(numberWrapper);
-    }
-    
-    function renderFileOptions(question, container) {
-        const fileWrapper = document.createElement("div");
-        fileWrapper.className = "file-options";
-        
-        // Allowed file types
-        const typeGroup = document.createElement("div");
-        typeGroup.className = "form-group";
-        
-        const typeLabel = document.createElement("label");
-        typeLabel.textContent = "Allowed File Types (optional)";
-        typeGroup.appendChild(typeLabel);
-        
-        const typeInput = document.createElement("input");
-        typeInput.type = "text";
-        typeInput.placeholder = "e.g., .pdf, .jpg, .png";
-        typeInput.value = question.accept || "";
-        typeInput.addEventListener("input", function() {
-            question.accept = this.value || null;
-        });
-        typeGroup.appendChild(typeInput);
-        
-        fileWrapper.appendChild(typeGroup);
-        
-        // Multiple files
-        const multipleGroup = document.createElement("div");
-        multipleGroup.className = "form-group";
-        
-        const multipleLabel = document.createElement("label");
-        multipleLabel.className = "checkbox-label";
-        
-        const multipleInput = document.createElement("input");
-        multipleInput.type = "checkbox";
-        multipleInput.checked = question.multiple || false;
-        multipleInput.addEventListener("change", function() {
-            question.multiple = this.checked;
-        });
-        
-        multipleLabel.appendChild(multipleInput);
-        multipleLabel.appendChild(document.createTextNode("Allow multiple files"));
-        
-        multipleGroup.appendChild(multipleLabel);
-        
-        fileWrapper.appendChild(multipleGroup);
-        
-        container.appendChild(fileWrapper);
-    }
-    
-    function saveQuestionEdit() {
-        const question = window.formBuilderState.editingQuestion;
-        const index = window.formBuilderState.editingQuestionIndex;
-        
-        if (!question) return;
-        
-        // Update question properties
-        question.title = document.getElementById("edit-question-title").value;
-        question.description = document.getElementById("edit-question-description").value;
-        question.required = document.getElementById("edit-question-required").checked;
-        
-        // Update question in state
-        window.formBuilderState.form.questions[index] = question;
-        
-        // Re-render the question
-        const questionElement = document.querySelector(`.question-item[data-id="${question.id}"]`);
-        if (questionElement) {
-            questionElement.querySelector(".question-title").textContent = question.title;
+    // Add event delegation for option label changes
+    optionsList.addEventListener("input", function(e) {
+        if (e.target.classList.contains("option-label")) {
+            const optionItem = e.target.closest(".option-item");
+            const index = parseInt(optionItem.dataset.index);
             
-            // Update preview content
-            const previewElement = questionElement.querySelector(".question-preview");
-            previewElement.innerHTML = getQuestionPreviewContent(question);
-            
-            // Update required toggle
-            questionElement.querySelector(".required-checkbox").checked = question.required;
-        }
-        
-        // Close modal
-        closeAllModals();
-        
-        // Clear editing state
-        window.formBuilderState.editingQuestion = null;
-        window.formBuilderState.editingQuestionIndex = -1;
-    }
-    
-    function duplicateQuestion(questionId, index) {
-        const question = window.formBuilderState.form.questions[index];
-        if (!question) return;
-        
-        // Create a deep copy of the question
-        const newQuestion = JSON.parse(JSON.stringify(question));
-        newQuestion.id = `q${Date.now()}`;
-        newQuestion.title = `${question.title} (Copy)`;
-        
-        // Add to questions array
-        window.formBuilderState.form.questions.splice(index + 1, 0, newQuestion);
-        
-        // Render the new question
-        renderQuestion(newQuestion, index + 1);
-        
-        // Update indices for all questions after this one
-        const questionElements = document.querySelectorAll(".question-item");
-        for (let i = index + 2; i < window.formBuilderState.form.questions.length; i++) {
-            if (questionElements[i]) {
-                questionElements[i].dataset.index = i;
+            if (index !== -1 && window.formBuilderState.editingQuestion.options[index]) {
+                window.formBuilderState.editingQuestion.options[index].label = e.target.value;
             }
         }
+    });
+    
+    container.appendChild(optionsWrapper);
+}
+
+function renderScaleOptions(question, container) {
+    const scaleWrapper = document.createElement("div");
+    scaleWrapper.className = "scale-options";
+    
+    // Min value
+    const minGroup = document.createElement("div");
+    minGroup.className = "form-group";
+    
+    const minLabel = document.createElement("label");
+    minLabel.textContent = "Minimum Value";
+    minGroup.appendChild(minLabel);
+    
+    const minInput = document.createElement("input");
+    minInput.type = "number";
+    minInput.value = question.min_value || (question.type === 'rating' ? 1 : 0);
+    minInput.addEventListener("input", function() {
+        window.formBuilderState.editingQuestion.min_value = parseInt(this.value);
+    });
+    minGroup.appendChild(minInput);
+    
+    scaleWrapper.appendChild(minGroup);
+    
+    // Max value
+    const maxGroup = document.createElement("div");
+    maxGroup.className = "form-group";
+    
+    const maxLabel = document.createElement("label");
+    maxLabel.textContent = "Maximum Value";
+    maxGroup.appendChild(maxLabel);
+    
+    const maxInput = document.createElement("input");
+    maxInput.type = "number";
+    maxInput.value = question.max_value || (question.type === 'rating' ? 5 : 10);
+    maxInput.addEventListener("input", function() {
+        window.formBuilderState.editingQuestion.max_value = parseInt(this.value);
+    });
+    maxGroup.appendChild(maxInput);
+    
+    scaleWrapper.appendChild(maxGroup);
+    
+    container.appendChild(scaleWrapper);
+}
+
+function renderNumberOptions(question, container) {
+    const numberWrapper = document.createElement("div");
+    numberWrapper.className = "number-options";
+    
+    // Min value
+    const minGroup = document.createElement("div");
+    minGroup.className = "form-group";
+    
+    const minLabel = document.createElement("label");
+    minLabel.textContent = "Minimum Value (optional)";
+    minGroup.appendChild(minLabel);
+    
+    const minInput = document.createElement("input");
+    minInput.type = "number";
+    minInput.value = question.min_value || "";
+    minInput.addEventListener("input", function() {
+        window.formBuilderState.editingQuestion.min_value = this.value ? parseInt(this.value) : null;
+    });
+    minGroup.appendChild(minInput);
+    
+    numberWrapper.appendChild(minGroup);
+    
+    // Max value
+    const maxGroup = document.createElement("div");
+    maxGroup.className = "form-group";
+    
+    const maxLabel = document.createElement("label");
+    maxLabel.textContent = "Maximum Value (optional)";
+    maxGroup.appendChild(maxLabel);
+    
+    const maxInput = document.createElement("input");
+    maxInput.type = "number";
+    maxInput.value = question.max_value || "";
+    maxInput.addEventListener("input", function() {
+        window.formBuilderState.editingQuestion.max_value = this.value ? parseInt(this.value) : null;
+    });
+    maxGroup.appendChild(maxInput);
+    
+    numberWrapper.appendChild(maxGroup);
+    
+    container.appendChild(numberWrapper);
+}
+
+function renderFileOptions(question, container) {
+    const fileWrapper = document.createElement("div");
+    fileWrapper.className = "file-options";
+    
+    // Allowed file types
+    const typeGroup = document.createElement("div");
+    typeGroup.className = "form-group";
+    
+    const typeLabel = document.createElement("label");
+    typeLabel.textContent = "Allowed File Types (comma separated)";
+    typeGroup.appendChild(typeLabel);
+    
+    const typeInput = document.createElement("input");
+    typeInput.type = "text";
+    typeInput.placeholder = "e.g., .pdf, .jpg, .png";
+    typeInput.value = question.accept || "";
+    typeInput.addEventListener("input", function() {
+        window.formBuilderState.editingQuestion.accept = this.value || null;
+    });
+    typeGroup.appendChild(typeInput);
+    
+    fileWrapper.appendChild(typeGroup);
+    
+    // Multiple files
+    const multipleGroup = document.createElement("div");
+    multipleGroup.className = "form-group";
+    
+    const multipleLabel = document.createElement("label");
+    multipleLabel.className = "checkbox-label";
+    
+    const multipleInput = document.createElement("input");
+    multipleInput.type = "checkbox";
+    multipleInput.checked = question.multiple || false;
+    multipleInput.addEventListener("change", function() {
+        window.formBuilderState.editingQuestion.multiple = this.checked;
+    });
+    
+    multipleLabel.appendChild(multipleInput);
+    multipleLabel.appendChild(document.createTextNode("Allow multiple files"));
+    
+    multipleGroup.appendChild(multipleLabel);
+    
+    fileWrapper.appendChild(multipleGroup);
+    
+    container.appendChild(fileWrapper);
+}
+
+function saveQuestionEdit() {
+    const editingQuestion = window.formBuilderState.editingQuestion;
+    const index = window.formBuilderState.editingQuestionIndex;
+    
+    if (!editingQuestion) return;
+    
+    // Update question properties from form inputs
+    editingQuestion.title = document.getElementById("edit-question-title").value;
+    editingQuestion.description = document.getElementById("edit-question-description").value;
+    editingQuestion.required = document.getElementById("edit-question-required").checked;
+    
+    // Update question in state (replace the original with the edited copy)
+    window.formBuilderState.form.questions[index] = editingQuestion;
+    
+    // Re-render the question
+    const questionsContainer = document.getElementById("questions-container");
+    const questionElements = questionsContainer.querySelectorAll(".question-item");
+    
+    if (questionElements[index]) {
+        // Remove the old element
+        questionElements[index].remove();
+        
+        // Insert the new element at the correct position
+        if (index === 0) {
+            // If it's the first element
+            renderQuestion(editingQuestion, index);
+        } else if (index >= questionElements.length - 1) {
+            // If it's the last element
+            renderQuestion(editingQuestion, index);
+        } else {
+            // If it's in the middle
+            renderQuestion(editingQuestion, index);
+            // Reorder elements if needed
+            const newQuestionElements = questionsContainer.querySelectorAll(".question-item");
+            questionsContainer.insertBefore(newQuestionElements[newQuestionElements.length - 1], questionElements[index]);
+        }
     }
     
-    function deleteQuestion(questionId, index) {
-        // Remove from questions array
-        window.formBuilderState.form.questions.splice(index, 1);
-        
-        // Remove from DOM
-        const questionElement = document.querySelector(`.question-item[data-id="${questionId}"]`);
-        if (questionElement) {
-            questionElement.remove();
-        }
-        
-        // Update indices for all questions after this one
-        const questionElements = document.querySelectorAll(".question-item");
-        for (let i = index; i < window.formBuilderState.form.questions.length; i++) {
-            if (questionElements[i]) {
-                questionElements[i].dataset.index = i;
-            }
-        }
-        
+    // Close modal
+    closeAllModals();
+    
+    // Clear editing state
+    window.formBuilderState.editingQuestion = null;
+    window.formBuilderState.editingQuestionIndex = -1;
+}
+
+function duplicateQuestion(questionId, index) {
+    const question = window.formBuilderState.form.questions[index];
+    if (!question) return;
+    
+    // Create a deep copy of the question
+    const newQuestion = JSON.parse(JSON.stringify(question));
+    newQuestion.id = `q${Date.now()}`;
+    newQuestion.title = `${question.title} (Copy)`;
+    
+    // Add to questions array
+    window.formBuilderState.form.questions.splice(index + 1, 0, newQuestion);
+    
+    // Re-render all questions to ensure proper indexing
+    const questionsContainer = document.getElementById("questions-container");
+    questionsContainer.innerHTML = "";
+    window.formBuilderState.form.questions.forEach((q, i) => {
+        renderQuestion(q, i);
+    });
+}
+
+function deleteQuestion(questionId, index) {
+    // Remove from questions array
+    window.formBuilderState.form.questions.splice(index, 1);
+    
+    // Re-render all questions to ensure proper indexing
+    const questionsContainer = document.getElementById("questions-container");
+    questionsContainer.innerHTML = "";
+    
+    if (window.formBuilderState.form.questions.length === 0) {
         // Show empty state if no questions left
-        if (window.formBuilderState.form.questions.length === 0) {
-            const questionsContainer = document.getElementById("questions-container");
-            questionsContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                    </div>
-                    <h3>No questions yet</h3>
-                    <p>Add a question from the sidebar to get started</p>
+        questionsContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                 </div>
-            `;
-        }
+                <h3>No questions yet</h3>
+                <p>Add a question from the sidebar to get started</p>
+            </div>
+        `;
+    } else {
+        // Render all questions
+        window.formBuilderState.form.questions.forEach((q, i) => {
+            renderQuestion(q, i);
+        });
     }
     
-    function openLogicModal(questionId, index) {
-        const question = window.formBuilderState.form.questions[index];
-        if (!question) return;
+    // Also remove any logic rules that refer to this question
+    window.formBuilderState.form.questions.forEach(q => {
+        if (q.logic) {
+            q.logic = q.logic.filter(rule => 
+                rule.condition.question_id !== questionId && 
+                (rule.action.type !== 'jump_to' || rule.action.target_id !== questionId)
+            );
+            
+            // If no rules left, set logic to null
+            if (q.logic.length === 0) {
+                q.logic = null;
+            }
+        }
+    });
+    
+    // Remove from dynamic content if referenced
+    if (window.formBuilderState.form.end_screen.dynamic_content && 
+        window.formBuilderState.form.end_screen.dynamic_content[questionId]) {
+        delete window.formBuilderState.form.end_screen.dynamic_content[questionId];
         
-        // Store the question being edited
-        window.formBuilderState.editingQuestion = question;
-        window.formBuilderState.editingQuestionIndex = index;
-        
-        // Open logic modal
-        const modal = document.getElementById("logic-modal");
-        if (!modal) return;
-        
-        // Render logic rules
-        renderLogicRules(question);
-        
-        // Show modal
-        modal.classList.add("active");
+        // If no dynamic content rules left, set to null
+        if (Object.keys(window.formBuilderState.form.end_screen.dynamic_content).length === 0) {
+            window.formBuilderState.form.end_screen.dynamic_content = null;
+            document.getElementById("enable-dynamic-content").checked = false;
+            document.getElementById("dynamic-content-container").style.display = "none";
+        } else {
+            // Re-render dynamic rules
+            renderDynamicRules(window.formBuilderState.form.end_screen.dynamic_content);
+        }
+    }
+}
+
+function openLogicModal(questionId, index) {
+    const question = window.formBuilderState.form.questions[index];
+    if (!question) return;
+    
+    // Store the question being edited
+    window.formBuilderState.editingQuestion = question;
+    window.formBuilderState.editingQuestionIndex = index;
+    
+    // Open logic modal
+    const modal = document.getElementById("logic-modal");
+    if (!modal) return;
+    
+    // Render logic rules
+    renderLogicRules(question);
+    
+    // Show modal
+    modal.classList.add("active");
+}
+
+function renderLogicRules(question) {
+    const rulesContainer = document.getElementById("logic-rules-container");
+    if (!rulesContainer) return;
+    
+    // Clear container
+    rulesContainer.innerHTML = "";
+    
+    // If no logic rules yet, show empty state
+    if (!question.logic || question.logic.length === 0) {
+        rulesContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                </div>
+                <h4>No logic rules yet</h4>
+                <p>Add a rule to control the flow of your form</p>
+            </div>
+        `;
+        return;
     }
     
-    function renderLogicRules(question) {
-        const rulesContainer = document.getElementById("logic-rules-container");
-        if (!rulesContainer) return;
+    // Render each logic rule
+    question.logic.forEach((rule, index) => {
+        const ruleElement = document.createElement("div");
+        ruleElement.className = "logic-rule";
         
-        // Clear container
-        rulesContainer.innerHTML = "";
+        // Get question title for condition
+        const conditionQuestion = window.formBuilderState.form.questions.find(q => q.id === rule.condition.question_id);
+        const questionTitle = conditionQuestion ? conditionQuestion.title : "Unknown question";
         
-        // If no logic rules yet, show empty state
-        if (!question.logic || question.logic.length === 0) {
-            rulesContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                    </div>
-                    <h4>No logic rules yet</h4>
-                    <p>Add a rule to control the flow of your form</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Render each logic rule
-        question.logic.forEach((rule, index) => {
-            const ruleElement = document.createElement("div");
-            ruleElement.className = "logic-rule";
-            
-            // Get question title for condition
-            const conditionQuestion = window.formBuilderState.form.questions.find(q => q.id === rule.condition.question_id);
-            const questionTitle = conditionQuestion ? conditionQuestion.title : "Unknown question";
-            
-            // Get target title for action
-            let targetTitle = "end of form";
-            if (rule.action.type === "jump_to" && rule.action.target_id) {
+        // Get target title for action
+        let targetTitle = "end of form";
+        if (rule.action.type === "jump_to" && rule.action.target_id) {
+            if (rule.action.target_id === "end") {
+                targetTitle = "end screen";
+            } else {
                 const targetQuestion = window.formBuilderState.form.questions.find(q => q.id === rule.action.target_id);
                 targetTitle = targetQuestion ? targetQuestion.title : "Unknown question";
             }
+        }
+        
+        // Format operator for display
+        let operatorDisplay = rule.condition.operator.replace(/_/g, ' ');
+        
+        ruleElement.innerHTML = `
+            <div class="rule-header">
+                <div class="rule-title">Rule ${index + 1}</div>
+                <div class="rule-actions">
+                    <button class="rule-action btn-edit-rule" data-index="${index}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </button>
+                    <button class="rule-action btn-delete-rule" data-index="${index}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="rule-content">
+                <p>If answer to "<strong>${questionTitle}</strong>" ${operatorDisplay} "${rule.condition.value}"</p>
+                <p>Then ${rule.action.type.replace('_', ' ')} to <strong>${targetTitle}</strong></p>
+            </div>
+        `;
+        
+        rulesContainer.appendChild(ruleElement);
+    });
+    
+    // Add event listeners for rule actions
+    rulesContainer.addEventListener("click", function(e) {
+        const editButton = e.target.closest(".btn-edit-rule");
+        if (editButton) {
+            const index = parseInt(editButton.dataset.index);
+            editLogicRule(index);
+        }
+        
+        const deleteButton = e.target.closest(".btn-delete-rule");
+        if (deleteButton) {
+            const index = parseInt(deleteButton.dataset.index);
+            deleteLogicRule(index);
+        }
+    });
+}
+
+function addLogicRule() {
+    const question = window.formBuilderState.editingQuestion;
+    if (!question) return;
+    
+    // Initialize logic array if it doesn't exist
+    if (!question.logic) {
+        question.logic = [];
+    }
+    
+    // Create a new rule template
+    const newRule = {
+        condition: {
+            question_id: "",
+            operator: "equals",
+            value: ""
+        },
+        action: {
+            type: "jump_to",
+            target_id: ""
+        }
+    };
+    
+    // Add rule to array
+    question.logic.push(newRule);
+    
+    // Re-render rules
+    renderLogicRules(question);
+    
+    // Scroll to bottom of container
+    const rulesContainer = document.getElementById("logic-rules-container");
+    if (rulesContainer) {
+        rulesContainer.scrollTop = rulesContainer.scrollHeight;
+    }
+    
+    // Edit the new rule
+    editLogicRule(question.logic.length - 1);
+}
+
+function editLogicRule(index) {
+    const question = window.formBuilderState.editingQuestion;
+    if (!question || !question.logic || !question.logic[index]) return;
+    
+    const rule = question.logic[index];
+    
+    // Create a rule editing form
+    const ruleForm = document.createElement("div");
+    ruleForm.className = "logic-rule-form";
+    ruleForm.innerHTML = `
+        <div class="form-group">
+            <label>When question</label>
+            <select id="rule-condition-question">
+                <option value="">Select a question</option>
+                ${window.formBuilderState.form.questions
+                    .filter(q => q.id !== question.id) // Exclude current question
+                    .map(q => `<option value="${q.id}" ${rule.condition.question_id === q.id ? 'selected' : ''}>${q.title}</option>`)
+                    .join('')}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Condition</label>
+            <select id="rule-condition-operator">
+                <option value="equals" ${rule.condition.operator === 'equals' ? 'selected' : ''}>Equals</option>
+                <option value="not_equals" ${rule.condition.operator === 'not_equals' ? 'selected' : ''}>Does not equal</option>
+                <option value="contains" ${rule.condition.operator === 'contains' ? 'selected' : ''}>Contains</option>
+                <option value="not_contains" ${rule.condition.operator === 'not_contains' ? 'selected' : ''}>Does not contain</option>
+                <option value="greater_than" ${rule.condition.operator === 'greater_than' ? 'selected' : ''}>Greater than</option>
+                <option value="less_than" ${rule.condition.operator === 'less_than' ? 'selected' : ''}>Less than</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Value</label>
+            <input type="text" id="rule-condition-value" value="${rule.condition.value}">
+        </div>
+        
+        <div class="form-group">
+            <label>Action</label>
+            <select id="rule-action-type">
+                <option value="jump_to" ${rule.action.type === 'jump_to' ? 'selected' : ''}>Jump to</option>
+                <option value="end_form" ${rule.action.type === 'end_form' ? 'selected' : ''}>End form</option>
+            </select>
+        </div>
+        
+        <div class="form-group" id="target-question-group" ${rule.action.type === 'end_form' ? 'style="display:none;"' : ''}>
+            <label>Target question</label>
+            <select id="rule-action-target">
+                <option value="">Select a question</option>
+                ${window.formBuilderState.form.questions
+                    .filter(q => q.id !== question.id) // Exclude current question
+                    .map(q => `<option value="${q.id}" ${rule.action.target_id === q.id ? 'selected' : ''}>${q.title}</option>`)
+                    .join('')}
+                <option value="end" ${rule.action.target_id === 'end' ? 'selected' : ''}>End screen</option>
+            </select>
+        </div>
+        
+        <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancel-rule-edit">Cancel</button>
+            <button type="button" class="btn btn-primary" id="save-rule-edit">Save Rule</button>
+        </div>
+    `;
+    
+    // Replace the rule element with the form
+    const ruleElement = document.querySelector(`.logic-rule:nth-child(${index + 1})`);
+    if (ruleElement) {
+        ruleElement.replaceWith(ruleForm);
+    } else {
+        document.getElementById("logic-rules-container").appendChild(ruleForm);
+    }
+    
+    // Add event listener for action type change
+    document.getElementById("rule-action-type").addEventListener("change", function() {
+        const targetGroup = document.getElementById("target-question-group");
+        if (this.value === "end_form") {
+            targetGroup.style.display = "none";
+        } else {
+            targetGroup.style.display = "block";
+        }
+    });
+    
+    // Add event listener for save button
+    document.getElementById("save-rule-edit").addEventListener("click", function() {
+        // Update rule with form values
+        rule.condition.question_id = document.getElementById("rule-condition-question").value;
+        rule.condition.operator = document.getElementById("rule-condition-operator").value;
+        rule.condition.value = document.getElementById("rule-condition-value").value;
+        rule.action.type = document.getElementById("rule-action-type").value;
+        
+        if (rule.action.type === "jump_to") {
+            rule.action.target_id = document.getElementById("rule-action-target").value;
+        } else {
+            rule.action.target_id = null;
+        }
+        
+        // Validate the rule
+        if (!rule.condition.question_id || !rule.condition.value || 
+            (rule.action.type === "jump_to" && !rule.action.target_id)) {
+            showNotification("Please fill in all fields for the logic rule.", "error");
+            return;
+        }
+        
+        // Re-render rules
+        renderLogicRules(question);
+    });
+    
+    // Add event listener for cancel button
+    document.getElementById("cancel-rule-edit").addEventListener("click", function() {
+        renderLogicRules(question);
+    });
+}
+
+function deleteLogicRule(index) {
+    const question = window.formBuilderState.editingQuestion;
+    if (!question || !question.logic) return;
+    
+    // Remove the rule
+    question.logic.splice(index, 1);
+    
+    // If no more rules, set logic to null
+    if (question.logic.length === 0) {
+        question.logic = null;
+    }
+    
+    // Re-render rules
+    renderLogicRules(question);
+}
+
+function saveLogic() {
+    // Logic is already saved as it's edited
+    // Just close the modal
+    closeAllModals();
+}
+
+function openDynamicRuleModal() {
+    const modal = document.getElementById("dynamic-rule-modal");
+    if (!modal) return;
+    
+    // Clear form fields
+    document.getElementById("dynamic-rule-question").value = "";
+    document.getElementById("dynamic-rule-condition").value = "equals";
+    document.getElementById("dynamic-rule-value").value = "";
+    document.getElementById("dynamic-content-title").value = "";
+    document.getElementById("dynamic-content-description").value = "";
+    
+    // Populate question dropdown
+    const questionSelect = document.getElementById("dynamic-rule-question");
+    if (questionSelect) {
+        questionSelect.innerHTML = '<option value="">Select a question</option>';
+        
+        window.formBuilderState.form.questions.forEach(question => {
+            questionSelect.innerHTML += `<option value="${question.id}">${question.title}</option>`;
+        });
+    }
+    
+    // Show modal
+    modal.classList.add("active");
+}
+
+function saveDynamicRule() {
+    const questionId = document.getElementById("dynamic-rule-question").value;
+    const condition = document.getElementById("dynamic-rule-condition").value;
+    const value = document.getElementById("dynamic-rule-value").value;
+    const title = document.getElementById("dynamic-content-title").value;
+    const description = document.getElementById("dynamic-content-description").value;
+    
+    if (!questionId || !condition || !value || !title) {
+        showNotification("Please fill in all required fields", "error");
+        return;
+    }
+    
+    // Initialize dynamic content if not exists
+    if (!window.formBuilderState.form.end_screen.dynamic_content) {
+        window.formBuilderState.form.end_screen.dynamic_content = {};
+    }
+    
+    // Initialize question conditions if not exists
+    if (!window.formBuilderState.form.end_screen.dynamic_content[questionId]) {
+        window.formBuilderState.form.end_screen.dynamic_content[questionId] = {};
+    }
+    
+    // Add rule
+    const conditionKey = `${condition}:${value}`;
+    window.formBuilderState.form.end_screen.dynamic_content[questionId][conditionKey] = {
+        title: title,
+        description: description
+    };
+    
+    // Re-render dynamic rules
+    renderDynamicRules(window.formBuilderState.form.end_screen.dynamic_content);
+    
+    // Close modal
+    closeAllModals();
+    
+    showNotification("Dynamic rule added successfully", "success");
+}
+
+function renderDynamicRules(dynamicContent) {
+    const rulesContainer = document.getElementById("dynamic-rules-list");
+    if (!rulesContainer) return;
+    
+    // Clear container
+    rulesContainer.innerHTML = "";
+    
+    // If no dynamic rules, show empty state
+    if (!dynamicContent || Object.keys(dynamicContent).length === 0) {
+        rulesContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                </div>
+                <h4>No rules yet</h4>
+                <p>Add a rule to show different content based on responses</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Render each dynamic rule
+    let ruleIndex = 0;
+    for (const questionId in dynamicContent) {
+        if (questionId === "default") continue;
+        
+        const question = window.formBuilderState.form.questions.find(q => q.id === questionId);
+        const questionTitle = question ? question.title : "Unknown question";
+        
+        for (const conditionKey in dynamicContent[questionId]) {
+            if (conditionKey === "default") continue;
+            
+            const content = dynamicContent[questionId][conditionKey];
+            const [condition, value] = conditionKey.split(':');
+            
+            // Format operator for display
+            let operatorDisplay = condition.replace(/_/g, ' ');
+            
+            const ruleElement = document.createElement("div");
+            ruleElement.className = "dynamic-rule";
             
             ruleElement.innerHTML = `
                 <div class="rule-header">
-                    <div class="rule-title">Rule ${index + 1}</div>
+                    <div class="rule-title">Rule ${ruleIndex + 1}</div>
                     <div class="rule-actions">
-                        <button class="rule-action btn-edit-rule" data-index="${index}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                        </button>
-                        <button class="rule-action btn-delete-rule" data-index="${index}">
+                        <button class="rule-action btn-delete-dynamic-rule" data-question="${questionId}" data-condition="${conditionKey}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                         </button>
                     </div>
                 </div>
                 <div class="rule-content">
-                    <p>If answer to "<strong>${questionTitle}</strong>" ${rule.condition.operator} "${rule.condition.value}"</p>
-                    <p>Then ${rule.action.type.replace('_', ' ')} to <strong>${targetTitle}</strong></p>
+                    <p>If answer to "<strong>${questionTitle}</strong>" ${operatorDisplay} "${value}"</p>
+                    <p>Show: <strong>${content.title}</strong></p>
                 </div>
             `;
             
             rulesContainer.appendChild(ruleElement);
-        });
-        
-        // Add event listeners for rule actions
-        rulesContainer.addEventListener("click", function(e) {
-            const editButton = e.target.closest(".btn-edit-rule");
-            if (editButton) {
-                const index = parseInt(editButton.dataset.index);
-                editLogicRule(index);
-            }
-            
-            const deleteButton = e.target.closest(".btn-delete-rule");
-            if (deleteButton) {
-                const index = parseInt(deleteButton.dataset.index);
-                deleteLogicRule(index);
-            }
-        });
+            ruleIndex++;
+        }
     }
     
-    function addLogicRule() {
-        const question = window.formBuilderState.editingQuestion;
-        if (!question) return;
-        
-        // Initialize logic array if it doesn't exist
-        if (!question.logic) {
-            question.logic = [];
-        }
-        
-        // Create a new rule template
-        const newRule = {
-            condition: {
-                question_id: "",
-                operator: "equals",
-                value: ""
-            },
-            action: {
-                type: "jump_to",
-                target_id: ""
-            }
-        };
-        
-        // Add rule to array
-        question.logic.push(newRule);
-        
-        // Re-render rules
-        renderLogicRules(question);
-        
-        // Scroll to bottom of container
-        const rulesContainer = document.getElementById("logic-rules-container");
-        if (rulesContainer) {
-            rulesContainer.scrollTop = rulesContainer.scrollHeight;
-        }
-        
-        // Edit the new rule
-        editLogicRule(question.logic.length - 1);
-    }
-    
-    function editLogicRule(index) {
-        const question = window.formBuilderState.editingQuestion;
-        if (!question || !question.logic || !question.logic[index]) return;
-        
-        const rule = question.logic[index];
-        
-        // Create a rule editing form
-        const ruleForm = document.createElement("div");
-        ruleForm.className = "logic-rule-form";
-        ruleForm.innerHTML = `
-            <div class="form-group">
-                <label>When question</label>
-                <select id="rule-condition-question">
-                    <option value="">Select a question</option>
-                    ${window.formBuilderState.form.questions
-                        .filter(q => q.id !== question.id) // Exclude current question
-                        .map(q => `<option value="${q.id}" ${rule.condition.question_id === q.id ? 'selected' : ''}>${q.title}</option>`)
-                        .join('')}
-                </select>
-            </div>
+    // Add event listener for delete buttons
+    rulesContainer.addEventListener("click", function(e) {
+        const deleteButton = e.target.closest(".btn-delete-dynamic-rule");
+        if (deleteButton) {
+            const questionId = deleteButton.dataset.question;
+            const conditionKey = deleteButton.dataset.condition;
             
-            <div class="form-group">
-                <label>Condition</label>
-                <select id="rule-condition-operator">
-                    <option value="equals" ${rule.condition.operator === 'equals' ? 'selected' : ''}>Equals</option>
-                    <option value="not_equals" ${rule.condition.operator === 'not_equals' ? 'selected' : ''}>Does not equal</option>
-                    <option value="contains" ${rule.condition.operator === 'contains' ? 'selected' : ''}>Contains</option>
-                    <option value="not_contains" ${rule.condition.operator === 'not_contains' ? 'selected' : ''}>Does not contain</option>
-                    <option value="greater_than" ${rule.condition.operator === 'greater_than' ? 'selected' : ''}>Greater than</option>
-                    <option value="less_than" ${rule.condition.operator === 'less_than' ? 'selected' : ''}>Less than</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label>Value</label>
-                <input type="text" id="rule-condition-value" value="${rule.condition.value}">
-            </div>
-            
-            <div class="form-group">
-                <label>Action</label>
-                <select id="rule-action-type">
-                    <option value="jump_to" ${rule.action.type === 'jump_to' ? 'selected' : ''}>Jump to</option>
-                    <option value="end_form" ${rule.action.type === 'end_form' ? 'selected' : ''}>End form</option>
-                </select>
-            </div>
-            
-            <div class="form-group" id="target-question-group" ${rule.action.type === 'end_form' ? 'style="display:none;"' : ''}>
-                <label>Target question</label>
-                <select id="rule-action-target">
-                    <option value="">Select a question</option>
-                    ${window.formBuilderState.form.questions
-                        .filter(q => q.id !== question.id) // Exclude current question
-                        .map(q => `<option value="${q.id}" ${rule.action.target_id === q.id ? 'selected' : ''}>${q.title}</option>`)
-                        .join('')}
-                    <option value="end" ${rule.action.target_id === 'end' ? 'selected' : ''}>End screen</option>
-                </select>
-            </div>
-            
-            <div class="form-actions">
-                <button type="button" class="btn btn-outline" id="cancel-rule-edit">Cancel</button>
-                <button type="button" class="btn btn-primary" id="save-rule-edit">Save Rule</button>
-            </div>
-        `;
-        
-        // Replace the rule element with the form
-        const ruleElement = document.querySelector(`.logic-rule:nth-child(${index + 1})`);
-        if (ruleElement) {
-            ruleElement.replaceWith(ruleForm);
-        } else {
-            document.getElementById("logic-rules-container").appendChild(ruleForm);
-        }
-        
-        // Add event listener for action type change
-        document.getElementById("rule-action-type").addEventListener("change", function() {
-            const targetGroup = document.getElementById("target-question-group");
-            if (this.value === "end_form") {
-                targetGroup.style.display = "none";
-            } else {
-                targetGroup.style.display = "block";
-            }
-        });
-        
-        // Add event listener for save button
-        document.getElementById("save-rule-edit").addEventListener("click", function() {
-            // Update rule with form values
-            rule.condition.question_id = document.getElementById("rule-condition-question").value;
-            rule.condition.operator = document.getElementById("rule-condition-operator").value;
-            rule.condition.value = document.getElementById("rule-condition-value").value;
-            rule.action.type = document.getElementById("rule-action-type").value;
-            
-            if (rule.action.type === "jump_to") {
-                rule.action.target_id = document.getElementById("rule-action-target").value;
-            } else {
-                rule.action.target_id = null;
-            }
-            
-            // Re-render rules
-            renderLogicRules(question);
-        });
-        
-        // Add event listener for cancel button
-        document.getElementById("cancel-rule-edit").addEventListener("click", function() {
-            renderLogicRules(question);
-        });
-    }
-    
-    function deleteLogicRule(index) {
-        const question = window.formBuilderState.editingQuestion;
-        if (!question || !question.logic) return;
-        
-        // Remove the rule
-        question.logic.splice(index, 1);
-        
-        // If no more rules, set logic to null
-        if (question.logic.length === 0) {
-            question.logic = null;
-        }
-        
-        // Re-render rules
-        renderLogicRules(question);
-    }
-    
-    function saveLogic() {
-        // Logic is already saved as it's edited
-        // Just close the modal
-        closeAllModals();
-    }
-    
-    function openDynamicRuleModal() {
-        const modal = document.getElementById("dynamic-rule-modal");
-        if (!modal) return;
-        
-        // Populate question dropdown
-        const questionSelect = document.getElementById("dynamic-rule-question");
-        if (questionSelect) {
-            questionSelect.innerHTML = '<option value="">Select a question</option>';
-            
-            window.formBuilderState.form.questions.forEach(question => {
-                questionSelect.innerHTML += `<option value="${question.id}">${question.title}</option>`;
-            });
-        }
-        
-        // Show modal
-        modal.classList.add("active");
-    }
-    
-    function saveDynamicRule() {
-        const questionId = document.getElementById("dynamic-rule-question").value;
-        const condition = document.getElementById("dynamic-rule-condition").value;
-        const value = document.getElementById("dynamic-rule-value").value;
-        const title = document.getElementById("dynamic-content-title").value;
-        const description = document.getElementById("dynamic-content-description").value;
-        
-        if (!questionId || !condition || !value) {
-            alert("Please fill in all required fields");
-            return;
-        }
-        
-        // Initialize dynamic content if not exists
-        if (!window.formBuilderState.form.end_screen.dynamic_content) {
-            window.formBuilderState.form.end_screen.dynamic_content = {};
-        }
-        
-        // Initialize question conditions if not exists
-        if (!window.formBuilderState.form.end_screen.dynamic_content[questionId]) {
-            window.formBuilderState.form.end_screen.dynamic_content[questionId] = {};
-        }
-        
-        // Add rule
-        const conditionKey = `${condition}:${value}`;
-        window.formBuilderState.form.end_screen.dynamic_content[questionId][conditionKey] = {
-            title: title,
-            description: description
-        };
-        
-        // Re-render dynamic rules
-        renderDynamicRules(window.formBuilderState.form.end_screen.dynamic_content);
-        
-        // Close modal
-        closeAllModals();
-    }
-    
-    function renderDynamicRules(dynamicContent) {
-        const rulesContainer = document.getElementById("dynamic-rules-list");
-        if (!rulesContainer) return;
-        
-        // Clear container
-        rulesContainer.innerHTML = "";
-        
-        // If no dynamic rules, show empty state
-        if (!dynamicContent || Object.keys(dynamicContent).length === 0) {
-            rulesContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                    </div>
-                    <h4>No rules yet</h4>
-                    <p>Add a rule to show different content based on responses</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Render each dynamic rule
-        let ruleIndex = 0;
-        for (const questionId in dynamicContent) {
-            const question = window.formBuilderState.form.questions.find(q => q.id === questionId);
-            const questionTitle = question ? question.title : "Unknown question";
-            
-            for (const conditionKey in dynamicContent[questionId]) {
-                const content = dynamicContent[questionId][conditionKey];
-                const [condition, value] = conditionKey.split(':');
+            if (questionId && conditionKey && window.formBuilderState.form.end_screen.dynamic_content[questionId]) {
+                // Delete the rule
+                delete window.formBuilderState.form.end_screen.dynamic_content[questionId][conditionKey];
                 
-                const ruleElement = document.createElement("div");
-                ruleElement.className = "dynamic-rule";
+                // If no more rules for this question, remove the question entry
+                if (Object.keys(window.formBuilderState.form.end_screen.dynamic_content[questionId]).length === 0) {
+                    delete window.formBuilderState.form.end_screen.dynamic_content[questionId];
+                }
                 
-                ruleElement.innerHTML = `
-                    <div class="rule-header">
-                        <div class="rule-title">Rule ${ruleIndex + 1}</div>
-                        <div class="rule-actions">
-                            <button class="rule-action btn-delete-dynamic-rule" data-question="${questionId}" data-condition="${conditionKey}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="rule-content">
-                        <p>If answer to "<strong>${questionTitle}</strong>" ${condition} "${value}"</p>
-                        <p>Show: <strong>${content.title}</strong></p>
-                    </div>
-                `;
-                
-                rulesContainer.appendChild(ruleElement);
-                ruleIndex++;
-            }
-        }
-        
-        // Add event listener for delete buttons
-        rulesContainer.addEventListener("click", function(e) {
-            const deleteButton = e.target.closest(".btn-delete-dynamic-rule");
-            if (deleteButton) {
-                const questionId = deleteButton.dataset.question;
-                const conditionKey = deleteButton.dataset.condition;
-                
-                if (questionId && conditionKey && window.formBuilderState.form.end_screen.dynamic_content[questionId]) {
-                    // Delete the rule
-                    delete window.formBuilderState.form.end_screen.dynamic_content[questionId][conditionKey];
-                    
                 // If no more rules at all, set dynamic_content to null
                 if (Object.keys(window.formBuilderState.form.end_screen.dynamic_content).length === 0) {
                     window.formBuilderState.form.end_screen.dynamic_content = null;
+                    document.getElementById("enable-dynamic-content").checked = false;
+                    document.getElementById("dynamic-content-container").style.display = "none";
                 }
                 
                 // Re-render dynamic rules
@@ -1325,37 +1502,45 @@ function getQuestionPreviewContent(question) {
     });
 }
 
-function makeQuestionsSortable() {
-    // For a real implementation, you would use a library like SortableJS
-    // This is a simplified version
-    const questionsContainer = document.getElementById("questions-container");
-    if (!questionsContainer) return;
+function setupImageUpload(inputId, previewId, onUpload) {
+    const fileInput = document.getElementById(inputId);
+    const previewElement = document.getElementById(previewId);
     
-    // Add drag handles and make sortable
-    const questionItems = questionsContainer.querySelectorAll(".question-item");
-    questionItems.forEach(item => {
-        // Add drag handle if not already present
-        if (!item.querySelector(".drag-handle")) {
-            const dragHandle = document.createElement("div");
-            dragHandle.className = "drag-handle";
-            dragHandle.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1"></circle><circle cx="8" cy="16" r="1"></circle><circle cx="16" cy="8" r="1"></circle><circle cx="16" cy="16" r="1"></circle></svg>
-            `;
-            const questionHeader = item.querySelector(".question-header");
-            if (questionHeader && questionHeader.firstChild) {
-                questionHeader.insertBefore(dragHandle, questionHeader.firstChild);
-            }
+    if (!fileInput || !previewElement) return;
+    
+    fileInput.addEventListener("change", function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Check file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showNotification("File size exceeds 5MB limit", "error");
+            fileInput.value = "";
+            return;
         }
+        
+        // Create a FileReader to read the file
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const imageUrl = event.target.result;
+            
+            // Display preview
+            previewElement.innerHTML = `<img src="${imageUrl}" alt="Preview">`;
+            
+            // Call the callback with the image URL
+            onUpload(imageUrl);
+        };
+        reader.readAsDataURL(file);
     });
-    
-    // In a real implementation, you would initialize SortableJS here
-    // and update the questions array when items are reordered
 }
 
 async function saveForm() {
     const token = localStorage.getItem("token");
     if (!token) {
-        alert("You must be logged in to save a form");
+        showNotification("You must be logged in to save a form", "error");
+        setTimeout(() => {
+            window.location.href = "login.html";
+        }, 2000);
         return;
     }
     
@@ -1365,27 +1550,35 @@ async function saveForm() {
         
         // Validate form data
         if (!formData.title) {
-            alert("Please enter a form title");
+            showNotification("Please enter a form title", "error");
             return;
         }
         
         if (!formData.start_screen.title) {
-            alert("Please enter a start screen title");
+            showNotification("Please enter a start screen title", "error");
             changeSection("start-screen");
             return;
         }
         
         if (!formData.end_screen.title) {
-            alert("Please enter an end screen title");
+            showNotification("Please enter an end screen title", "error");
             changeSection("end-screen");
             return;
         }
         
         if (formData.questions.length === 0) {
-            alert("Please add at least one question");
+            showNotification("Please add at least one question", "error");
             changeSection("questions");
             return;
         }
+        
+        // Process file uploads if any
+        if (Object.keys(window.formBuilderState.fileUploads).length > 0) {
+            // In a real implementation, you would upload the files to your server here
+            console.log("Processing file uploads:", window.formBuilderState.fileUploads);
+        }
+        
+        showLoadingIndicator();
         
         // Check if editing existing form or creating new one
         const urlParams = new URLSearchParams(window.location.search);
@@ -1421,15 +1614,20 @@ async function saveForm() {
         
         const savedForm = await response.json();
         
-        // Show success message
-        alert("Form saved successfully!");
+        hideLoadingIndicator();
         
-        // Redirect to forms page
-        window.location.href = "forms.html";
+        // Show success message
+        showNotification("Form saved successfully!", "success");
+        
+        // Redirect to forms page after a short delay
+        setTimeout(() => {
+            window.location.href = "forms.html";
+        }, 1500);
         
     } catch (error) {
+        hideLoadingIndicator();
         console.error("Error saving form:", error);
-        alert("Error saving form: " + error.message);
+        showNotification("Error saving form: " + error.message, "error");
     }
 }
 
@@ -1456,6 +1654,25 @@ function previewForm() {
 }
 
 function generatePreviewHtml(formData) {
+    // Define a function to adjust color for hover states
+    const adjustColor = (color, amount) => {
+        // Remove # if present
+        color = color.replace("#", "");
+        
+        // Parse the color
+        let r = parseInt(color.substring(0, 2), 16);
+        let g = parseInt(color.substring(2, 4), 16);
+        let b = parseInt(color.substring(4, 6), 16);
+        
+        // Adjust the color
+        r = Math.max(0, Math.min(255, r + amount));
+        g = Math.max(0, Math.min(255, g + amount));
+        b = Math.max(0, Math.min(255, b + amount));
+        
+        // Convert back to hex
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    };
+    
     return `
         <!DOCTYPE html>
         <html lang="en">
@@ -1496,7 +1713,7 @@ function generatePreviewHtml(formData) {
                 .progress-bar {
                     height: 100%;
                     width: 0;
-                    background: ${formData.theme?.primary_color || '#000'};
+                    background: ${formData.theme?.primary_color || '#3B82F6'};
                     transition: width 0.5s ease;
                 }
                 
@@ -1561,7 +1778,7 @@ function generatePreviewHtml(formData) {
                 
                 .input:focus {
                     outline: none;
-                    border-color: ${formData.theme?.primary_color || '#000'};
+                    border-color: ${formData.theme?.primary_color || '#3B82F6'};
                 }
                 
                 textarea.input {
@@ -1572,7 +1789,7 @@ function generatePreviewHtml(formData) {
                 .btn {
                     width: 100%;
                     padding: 15px;
-                    background: ${formData.theme?.primary_color || '#000'};
+                    background: ${formData.theme?.primary_color || '#3B82F6'};
                     color: #fff;
                     border: none;
                     border-radius: 8px;
@@ -1584,7 +1801,7 @@ function generatePreviewHtml(formData) {
                 }
                 
                 .btn:hover {
-                    background: ${formData.theme?.primary_color ? adjustColor(formData.theme.primary_color, -20) : '#333'};
+                    background: ${formData.theme?.primary_color ? adjustColor(formData.theme.primary_color, -20) : '#2563EB'};
                 }
                 
                 .btn:active {
@@ -1627,9 +1844,9 @@ function generatePreviewHtml(formData) {
                 }
                 
                 .rating-btn.selected {
-                    background: ${formData.theme?.primary_color || '#000'};
+                    background: ${formData.theme?.primary_color || '#3B82F6'};
                     color: #fff;
-                    border-color: ${formData.theme?.primary_color || '#000'};
+                    border-color: ${formData.theme?.primary_color || '#3B82F6'};
                 }
                 
                 .options {
@@ -1654,7 +1871,7 @@ function generatePreviewHtml(formData) {
                 }
                 
                 .option.selected {
-                    border-color: ${formData.theme?.primary_color || '#000'};
+                    border-color: ${formData.theme?.primary_color || '#3B82F6'};
                     background: #f9f9f9;
                 }
                 
@@ -1686,7 +1903,7 @@ function generatePreviewHtml(formData) {
                 }
                 
                 .checkbox-option.selected {
-                    border-color: ${formData.theme?.primary_color || '#000'};
+                    border-color: ${formData.theme?.primary_color || '#3B82F6'};
                     background: #f9f9f9;
                 }
                 
@@ -1714,6 +1931,34 @@ function generatePreviewHtml(formData) {
                 .checkmark svg {
                     width: 100%;
                     height: 100%;
+                }
+                
+                .file-upload-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 12px 20px;
+                    background: #f5f5f5;
+                    border: 1px dashed #ddd;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    margin-bottom: 15px;
+                }
+                
+                .file-upload-btn:hover {
+                    background: #ebebeb;
+                    border-color: #ccc;
+                }
+                
+                .file-upload-btn svg {
+                    margin-right: 8px;
+                }
+                
+                .file-formats {
+                    font-size: 14px;
+                    color: #666;
+                    margin-bottom: 20px;
                 }
                 
                 @media (max-width: 480px) {
@@ -1773,8 +2018,8 @@ function generatePreviewHtml(formData) {
                     <div class="success">
                         <div class="checkmark">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                                <circle cx="26" cy="26" r="25" fill="none" stroke="${formData.theme?.primary_color || '#000'}" stroke-width="2"/>
-                                <path fill="none" stroke="${formData.theme?.primary_color || '#000'}" stroke-width="2" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                                <circle cx="26" cy="26" r="25" fill="none" stroke="${formData.theme?.primary_color || '#3B82F6'}" stroke-width="2"/>
+                                <path fill="none" stroke="${formData.theme?.primary_color || '#3B82F6'}" stroke-width="2" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
                             </svg>
                         </div>
                         <h1>${formData.end_screen.title}</h1>
@@ -1788,6 +2033,7 @@ function generatePreviewHtml(formData) {
                 let currentSlide = 'start';
                 const questions = ${JSON.stringify(formData.questions.map(q => q.id))};
                 const totalSlides = questions.length + 2; // start + questions + end
+                const answers = {};
                 
                 // Update progress bar
                 function updateProgress() {
@@ -1807,6 +2053,11 @@ function generatePreviewHtml(formData) {
                 
                 // Go to next slide
                 function nextSlide(currentId) {
+                    // Save answer if this is a question
+                    if (currentId !== 'start' && currentId !== 'end') {
+                        saveAnswer(currentId);
+                    }
+                    
                     // Hide current slide
                     document.getElementById('slide-' + currentId).classList.remove('active');
                     
@@ -1869,6 +2120,72 @@ function generatePreviewHtml(formData) {
                     updateProgress();
                 }
                 
+                // Save the answer for a question
+                function saveAnswer(questionId) {
+                    const question = ${JSON.stringify(formData.questions)}.find(q => q.id === questionId);
+                    if (!question) return;
+                    
+                    let answer;
+                    
+                    switch (question.type) {
+                        case 'text':
+                        case 'paragraph':
+                        case 'email':
+                        case 'phone':
+                        case 'number':
+                        case 'date':
+                        case 'time':
+                        case 'url':
+                            answer = document.getElementById('input-' + questionId).value;
+                            break;
+                            
+                        case 'multiple_choice':
+                            const selectedOption = document.querySelector('#slide-' + questionId + ' .option.selected');
+                            if (selectedOption) {
+                                answer = selectedOption.getAttribute('data-value');
+                            }
+                            break;
+                            
+                        case 'checkbox':
+                            answer = [];
+                            document.querySelectorAll('#slide-' + questionId + ' .checkbox-option.selected input').forEach(input => {
+                                answer.push(input.value);
+                            });
+                            break;
+                            
+                        case 'dropdown':
+                            answer = document.getElementById('input-' + questionId).value;
+                            break;
+                            
+                        case 'rating':
+                            const selectedRating = document.querySelector('#slide-' + questionId + ' .rating-btn.selected');
+                            if (selectedRating) {
+                                answer = selectedRating.getAttribute('data-value');
+                            }
+                            break;
+                            
+                        case 'scale':
+                            answer = document.getElementById('input-' + questionId).value;
+                            break;
+                            
+                        case 'file':
+                            // In a real form, you would handle file uploads differently
+                            answer = "File upload demo";
+                            break;
+                            
+                        case 'location':
+                            answer = document.getElementById('input-' + questionId).value;
+                            break;
+                    }
+                    
+                    // Store the answer
+                    if (answer !== undefined) {
+                        answers[questionId] = answer;
+                    }
+                    
+                    console.log('Answers so far:', answers);
+                }
+                
                 // Reset form
                 function resetForm() {
                     // Hide current slide
@@ -1891,7 +2208,49 @@ function generatePreviewHtml(formData) {
                     document.querySelectorAll('.selected').forEach(selected => {
                         selected.classList.remove('selected');
                     });
+                    
+                    // Clear answers
+                    for (const key in answers) {
+                        delete answers[key];
+                    }
                 }
+                
+                // Multiple choice option selection
+                document.querySelectorAll('.option').forEach(option => {
+                    option.addEventListener('click', function() {
+                        // Deselect all other options in this question
+                        const questionSlide = this.closest('.slide');
+                        questionSlide.querySelectorAll('.option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        
+                        // Select this option
+                        this.classList.add('selected');
+                    });
+                });
+                
+                // Checkbox option selection
+                document.querySelectorAll('.checkbox-option').forEach(option => {
+                    option.addEventListener('click', function() {
+                        this.classList.toggle('selected');
+                        const checkbox = this.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                    });
+                });
+                
+                // Rating button selection
+                document.querySelectorAll('.rating-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        // Deselect all other rating buttons
+                        const ratingGroup = this.closest('.rating-group');
+                        ratingGroup.querySelectorAll('.rating-btn').forEach(b => {
+                            b.classList.remove('selected');
+                        });
+                        
+                        // Select this button
+                        this.classList.add('selected');
+                    });
+                });
                 
                 // Initialize
                 updateProgress();
@@ -1906,17 +2265,17 @@ function getQuestionInputHtml(question) {
     
     switch (question.type) {
         case 'text':
-            inputHtml = `<input type="text" class="input" id="input-${question.id}" placeholder="Your answer">`;
+            inputHtml = `<input type="text" class="input" id="input-${question.id}" placeholder="Your answer" ${question.required ? 'required' : ''}>`;
             break;
         case 'paragraph':
-            inputHtml = `<textarea class="input" id="input-${question.id}" placeholder="Your answer"></textarea>`;
+            inputHtml = `<textarea class="input" id="input-${question.id}" placeholder="Your answer" ${question.required ? 'required' : ''}></textarea>`;
             break;
         case 'multiple_choice':
             if (question.options && question.options.length > 0) {
                 inputHtml = `<div class="options">`;
                 question.options.forEach(option => {
                     inputHtml += `
-                        <div class="option" onclick="this.parentNode.querySelectorAll('.option').forEach(o => o.classList.remove('selected')); this.classList.add('selected');" data-value="${option.value}">
+                        <div class="option" data-value="${option.value}">
                             <h3>${option.label}</h3>
                             ${option.description ? `<p>${option.description}</p>` : ''}
                         </div>
@@ -1930,8 +2289,8 @@ function getQuestionInputHtml(question) {
                 inputHtml = `<div class="checkbox-list">`;
                 question.options.forEach(option => {
                     inputHtml += `
-                        <div class="checkbox-option" onclick="this.classList.toggle('selected'); this.querySelector('input').checked = !this.querySelector('input').checked;">
-                            <input type="checkbox" id="checkbox-${question.id}-${option.value}" value="${option.value}" onclick="event.stopPropagation();">
+                        <div class="checkbox-option">
+                            <input type="checkbox" id="checkbox-${question.id}-${option.value}" value="${option.value}">
                             <label for="checkbox-${question.id}-${option.value}">${option.label}</label>
                         </div>
                     `;
@@ -1941,7 +2300,7 @@ function getQuestionInputHtml(question) {
             break;
         case 'dropdown':
             if (question.options && question.options.length > 0) {
-                inputHtml = `<select class="input" id="input-${question.id}">`;
+                inputHtml = `<select class="input" id="input-${question.id}" ${question.required ? 'required' : ''}>`;
                 inputHtml += `<option value="" disabled selected>Select an option</option>`;
                 question.options.forEach(option => {
                     inputHtml += `<option value="${option.value}">${option.label}</option>`;
@@ -1953,7 +2312,7 @@ function getQuestionInputHtml(question) {
             inputHtml = `<div class="rating-group">`;
             const maxRating = question.max_value || 5;
             for (let i = 1; i <= maxRating; i++) {
-                inputHtml += `<button class="rating-btn" onclick="this.parentNode.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('selected')); this.classList.add('selected');" data-value="${i}">${i}</button>`;
+                inputHtml += `<button type="button" class="rating-btn" data-value="${i}">${i}</button>`;
             }
             inputHtml += `</div>`;
             break;
@@ -1962,80 +2321,56 @@ function getQuestionInputHtml(question) {
             const maxValue = question.max_value || 10;
             inputHtml = `
                 <div class="scale-container">
-                    <input type="range" class="scale-slider" id="input-${question.id}" min="${minValue}" max="${maxValue}" value="${Math.floor((maxValue - minValue) / 2) + minValue}">
-                    <div class="scale-value" id="scale-value-${question.id}">${Math.floor((maxValue - minValue) / 2) + minValue}</div>
-                    <script>
-                        document.getElementById("input-${question.id}").oninput = function() {
-                            document.getElementById("scale-value-${question.id}").textContent = this.value;
-                        };
-                    </script>
+                    <input type="range" class="input" id="input-${question.id}" min="${minValue}" max="${maxValue}" value="${Math.floor((maxValue - minValue) / 2) + minValue}" ${question.required ? 'required' : ''}>
+                    <div class="scale-labels">
+                        <span>${minValue}</span>
+                        <span>${maxValue}</span>
+                    </div>
                 </div>
             `;
             break;
         case 'email':
-            inputHtml = `<input type="email" class="input" id="input-${question.id}" placeholder="Email address">`;
+            inputHtml = `<input type="email" class="input" id="input-${question.id}" placeholder="Email address" ${question.required ? 'required' : ''}>`;
             break;
         case 'phone':
-            inputHtml = `<input type="tel" class="input" id="input-${question.id}" placeholder="Phone number">`;
+            inputHtml = `<input type="tel" class="input" id="input-${question.id}" placeholder="Phone number" ${question.required ? 'required' : ''}>`;
             break;
         case 'number':
-            inputHtml = `<input type="number" class="input" id="input-${question.id}" placeholder="Number"${question.min_value !== null ? ` min="${question.min_value}"` : ''}${question.max_value !== null ? ` max="${question.max_value}"` : ''}>`;
+            inputHtml = `<input type="number" class="input" id="input-${question.id}" placeholder="Number" ${question.min_value !== null ? `min="${question.min_value}"` : ''} ${question.max_value !== null ? `max="${question.max_value}"` : ''} ${question.required ? 'required' : ''}>`;
             break;
         case 'date':
-            inputHtml = `<input type="date" class="input" id="input-${question.id}">`;
+            inputHtml = `<input type="date" class="input" id="input-${question.id}" ${question.required ? 'required' : ''}>`;
             break;
         case 'time':
-            inputHtml = `<input type="time" class="input" id="input-${question.id}">`;
+            inputHtml = `<input type="time" class="input" id="input-${question.id}" ${question.required ? 'required' : ''}>`;
             break;
         case 'url':
-            inputHtml = `<input type="url" class="input" id="input-${question.id}" placeholder="Website URL">`;
+            inputHtml = `<input type="url" class="input" id="input-${question.id}" placeholder="Website URL" ${question.required ? 'required' : ''}>`;
             break;
         case 'location':
             inputHtml = `
                 <div class="location-container">
-                    <input type="text" class="input" id="input-${question.id}" placeholder="Enter location">
-                    <button type="button" class="btn location-btn" onclick="alert('This is a preview. Location detection would work in the actual form.');">Use Current Location</button>
+                    <input type="text" class="input" id="input-${question.id}" placeholder="Enter location" ${question.required ? 'required' : ''}>
+                    <button type="button" class="btn location-btn">Use Current Location</button>
                 </div>
             `;
             break;
         case 'file':
             inputHtml = `
                 <div class="file-container">
-                    <input type="file" class="input file-input" id="input-${question.id}"${question.multiple ? ' multiple' : ''}${question.accept ? ` accept="${question.accept}"` : ''}>
+                    <label class="file-upload-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Upload File${question.multiple ? 's' : ''}
+                    </label>
+                    ${question.accept ? `<div class="file-formats">Accepted formats: ${formatAcceptTypes(question.accept)}</div>` : ''}
                 </div>
             `;
             break;
         default:
-            inputHtml = `<input type="text" class="input" id="input-${question.id}" placeholder="Your answer">`;
+            inputHtml = `<input type="text" class="input" id="input-${question.id}" placeholder="Your answer" ${question.required ? 'required' : ''}>`;
     }
     
     return inputHtml;
-}
-
-function setupImageUpload(inputId, previewId, onUpload) {
-    const fileInput = document.getElementById(inputId);
-    const previewElement = document.getElementById(previewId);
-    
-    if (!fileInput || !previewElement) return;
-    
-    fileInput.addEventListener("change", function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        // In a real app, you would upload the file to a server
-        // For this demo, we'll use a data URL
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const imageUrl = event.target.result;
-            
-            // Display preview
-            previewElement.innerHTML = `<img src="${imageUrl}" alt="Preview">`;
-            
-            // Call the callback with the image URL
-            onUpload(imageUrl);
-        };
-        reader.readAsDataURL(file);
-    });
 }
 
 function closeAllModals() {
@@ -2044,21 +2379,96 @@ function closeAllModals() {
     });
 }
 
-// Utility function to darken/lighten colors for hover states
-function adjustColor(color, amount) {
-    // Remove # if present
-    color = color.replace("#", "");
+function showNotification(message, type = "info") {
+    // Create notification element if it doesn't exist
+    let notification = document.querySelector(".notification");
+    if (!notification) {
+        notification = document.createElement("div");
+        notification.className = "notification";
+        document.body.appendChild(notification);
+    }
     
-    // Parse the color
-    let r = parseInt(color.substring(0, 2), 16);
-    let g = parseInt(color.substring(2, 4), 16);
-    let b = parseInt(color.substring(4, 6), 16);
+    // Set notification content and type
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
     
-    // Adjust the color
-    r = Math.max(0, Math.min(255, r + amount));
-    g = Math.max(0, Math.min(255, g + amount));
-    b = Math.max(0, Math.min(255, b + amount));
+    // Show notification
+    notification.style.display = "block";
     
-    // Convert back to hex
-    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    // Add animation class
+    setTimeout(() => {
+        notification.classList.add("show");
+    }, 10);
+    
+    // Hide notification after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove("show");
+        setTimeout(() => {
+            notification.style.display = "none";
+        }, 300);
+    }, 3000);
 }
+
+function showLoadingIndicator() {
+    // Create loading overlay if it doesn't exist
+    let loadingOverlay = document.querySelector(".loading-overlay");
+    if (!loadingOverlay) {
+        loadingOverlay = document.createElement("div");
+        loadingOverlay.className = "loading-overlay";
+        loadingOverlay.innerHTML = `<div class="spinner"></div>`;
+        document.body.appendChild(loadingOverlay);
+    }
+    
+    // Show loading overlay
+    loadingOverlay.style.display = "flex";
+}
+
+function hideLoadingIndicator() {
+    // Hide loading overlay
+    const loadingOverlay = document.querySelector(".loading-overlay");
+    if (loadingOverlay) {
+        loadingOverlay.style.display = "none";
+    }
+}
+
+// Add this to your CSS
+const style = document.createElement("style");
+style.textContent = `
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 500;
+    z-index: 9999;
+    max-width: 300px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.notification.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.notification.success {
+    background-color: #10B981;
+}
+
+.notification.error {
+    background-color: #EF4444;
+}
+
+.notification.info {
+    background-color: #3B82F6;
+}
+
+.notification.warning {
+    background-color: #F59E0B;
+}
+`;
+document.head.appendChild(style);

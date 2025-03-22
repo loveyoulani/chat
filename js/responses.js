@@ -25,13 +25,19 @@ document.addEventListener("DOMContentLoaded", async function() {
         itemsPerPage: 10,
         currentView: "table", // table or individual
         currentResponseIndex: 0,
+        currentChartIndex: 0,
         filter: {
             dateRange: "all",
             search: ""
-        }
+        },
+        charts: {}, // Store chart instances
+        fileDownloads: {} // Store file download URLs
     };
     
     try {
+        // Show loading indicator
+        showLoadingIndicator();
+        
         // Fetch form details
         await loadForm(token, formId);
         
@@ -41,9 +47,13 @@ document.addEventListener("DOMContentLoaded", async function() {
         // Set up event listeners
         setupEventListeners();
         
+        // Hide loading indicator
+        hideLoadingIndicator();
+        
     } catch (error) {
         console.error("Error loading responses:", error);
-        showErrorMessage("Failed to load responses. Please try again.");
+        showNotification("Failed to load responses. Please try again.", "error");
+        hideLoadingIndicator();
     }
 });
 
@@ -86,8 +96,14 @@ async function loadResponses(token, formId) {
         const responses = await response.json();
         window.responsesState.responses = responses;
         
+        // Pre-process file data
+        processFileData(responses);
+        
         // Update stats
         updateResponseStats(responses);
+        
+        // Generate charts
+        generateCharts(responses);
         
         // Apply filters and render
         const filteredResponses = applyFilters(responses);
@@ -97,6 +113,36 @@ async function loadResponses(token, formId) {
         console.error("Error fetching responses:", error);
         throw error;
     }
+}
+
+function processFileData(responses) {
+    // Process file URLs and metadata
+    const fileDownloads = {};
+    
+    if (window.responsesState.form && window.responsesState.form.questions) {
+        // Find file upload questions
+        const fileQuestions = window.responsesState.form.questions.filter(q => q.type === 'file');
+        
+        if (fileQuestions.length > 0) {
+            responses.forEach(response => {
+                fileQuestions.forEach(question => {
+                    const fileData = response.answers[question.id];
+                    if (fileData && fileData.file_id) {
+                        // Store file download info
+                        const fileKey = `${response._id}_${question.id}`;
+                        fileDownloads[fileKey] = {
+                            url: `${API_URL}/files/${fileData.file_id}`,
+                            filename: fileData.filename || 'downloaded_file',
+                            contentType: fileData.content_type || 'application/octet-stream',
+                            size: fileData.size || 0
+                        };
+                    }
+                });
+            });
+        }
+    }
+    
+    window.responsesState.fileDownloads = fileDownloads;
 }
 
 function updateFormDetails(form) {
@@ -151,6 +197,537 @@ function updateResponseStats(responses) {
     }
 }
 
+function generateCharts(responses) {
+    if (responses.length === 0) return;
+    
+    // Destroy existing charts to prevent memory leaks
+    Object.values(window.responsesState.charts).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') {
+            chart.destroy();
+        }
+    });
+    
+    window.responsesState.charts = {};
+    
+    // Generate responses over time chart
+    generateTimeChart(responses);
+    
+    // Generate charts for each question
+    generateQuestionCharts(responses);
+    
+    // Set up chart navigation
+    setupChartNavigation();
+}
+
+function generateTimeChart(responses) {
+    const ctx = document.getElementById('responses-chart');
+    if (!ctx) return;
+    
+    // Group responses by date
+    const dateGroups = {};
+    
+    // Get date range (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 29); // 30 days including today
+    
+    // Initialize all dates in the range
+    for (let d = new Date(thirtyDaysAgo); d <= today; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        dateGroups[dateStr] = 0;
+    }
+    
+    // Count responses by date
+    responses.forEach(response => {
+        const date = new Date(response.created_at);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        if (dateGroups[dateStr] !== undefined) {
+            dateGroups[dateStr]++;
+        }
+    });
+    
+    // Prepare data for chart
+    const labels = Object.keys(dateGroups).sort();
+    const data = labels.map(date => dateGroups[date]);
+    
+    // Create the chart
+    const timeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels.map(date => {
+                const d = new Date(date);
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            }),
+            datasets: [{
+                label: 'Responses',
+                data: data,
+                borderColor: '#3B82F6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#3B82F6',
+                pointRadius: 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+    
+    // Store chart instance
+    window.responsesState.charts.timeChart = timeChart;
+}
+
+function generateQuestionCharts(responses) {
+    if (!window.responsesState.form || !window.responsesState.form.questions) return;
+    
+    const chartsWrapper = document.getElementById('charts-wrapper');
+    const chartIndicators = document.getElementById('chart-indicators');
+    
+    if (!chartsWrapper || !chartIndicators) return;
+    
+    // Clear containers
+    chartsWrapper.innerHTML = '';
+    chartIndicators.innerHTML = '';
+    
+    // Only create charts for certain question types
+    const chartableQuestions = window.responsesState.form.questions.filter(q => 
+        ['multiple_choice', 'checkbox', 'dropdown', 'rating', 'scale'].includes(q.type)
+    );
+    
+    // Create charts for all chartable questions
+    chartableQuestions.forEach((question, index) => {
+        // Create chart container
+        const chartDiv = document.createElement('div');
+        chartDiv.className = 'chart-container';
+        chartDiv.setAttribute('data-index', index);
+        chartDiv.innerHTML = `
+            <h3>${question.title}</h3>
+            <canvas id="chart-${question.id}"></canvas>
+        `;
+        chartsWrapper.appendChild(chartDiv);
+        
+        // Create indicator
+        const indicator = document.createElement('div');
+        indicator.className = 'chart-indicator';
+        indicator.setAttribute('data-index', index);
+        if (index === 0) indicator.classList.add('active');
+        chartIndicators.appendChild(indicator);
+        
+        // Generate chart based on question type
+        switch (question.type) {
+            case 'multiple_choice':
+            case 'dropdown':
+                createPieChart(question, responses);
+                break;
+            case 'checkbox':
+                createBarChart(question, responses);
+                break;
+            case 'rating':
+            case 'scale':
+                createRatingChart(question, responses);
+                break;
+        }
+    });
+    
+    // Show/hide navigation based on chart count
+    const chartNav = document.querySelectorAll('.chart-nav');
+    chartNav.forEach(nav => {
+        nav.style.display = chartableQuestions.length > 1 ? 'flex' : 'none';
+    });
+    
+    // Show/hide indicators based on chart count
+    chartIndicators.style.display = chartableQuestions.length > 1 ? 'flex' : 'none';
+    
+    // Initialize scroll position
+    window.responsesState.currentChartIndex = 0;
+    scrollToCurrentChart();
+}
+
+function setupChartNavigation() {
+    const prevBtn = document.getElementById('chart-prev');
+    const nextBtn = document.getElementById('chart-next');
+    const chartsWrapper = document.getElementById('charts-wrapper');
+    const indicators = document.querySelectorAll('.chart-indicator');
+    
+    if (!prevBtn || !nextBtn || !chartsWrapper) return;
+    
+    // Previous chart button
+    prevBtn.addEventListener('click', function() {
+        const chartContainers = document.querySelectorAll('.chart-container');
+        if (chartContainers.length <= 1) return;
+        
+        if (window.responsesState.currentChartIndex > 0) {
+            window.responsesState.currentChartIndex--;
+            scrollToCurrentChart();
+            updateChartIndicators();
+        }
+    });
+    
+    // Next chart button
+    nextBtn.addEventListener('click', function() {
+        const chartContainers = document.querySelectorAll('.chart-container');
+        if (chartContainers.length <= 1) return;
+        
+        if (window.responsesState.currentChartIndex < chartContainers.length - 1) {
+            window.responsesState.currentChartIndex++;
+            scrollToCurrentChart();
+            updateChartIndicators();
+        }
+    });
+    
+    // Chart indicators click
+    indicators.forEach(indicator => {
+        indicator.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            window.responsesState.currentChartIndex = index;
+            scrollToCurrentChart();
+            updateChartIndicators();
+        });
+    });
+    
+    // Handle swipe on mobile
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    chartsWrapper.addEventListener('touchstart', function(event) {
+        touchStartX = event.changedTouches[0].screenX;
+    });
+    
+    chartsWrapper.addEventListener('touchend', function(event) {
+        touchEndX = event.changedTouches[0].screenX;
+        handleSwipe();
+    });
+    
+    function handleSwipe() {
+        const chartContainers = document.querySelectorAll('.chart-container');
+        if (chartContainers.length <= 1) return;
+        
+        const swipeThreshold = 50; // Minimum distance for swipe
+        
+        if (touchEndX < touchStartX - swipeThreshold) {
+            // Swipe left - next chart
+            if (window.responsesState.currentChartIndex < chartContainers.length - 1) {
+                window.responsesState.currentChartIndex++;
+                scrollToCurrentChart();
+                updateChartIndicators();
+            }
+        }
+        
+        if (touchEndX > touchStartX + swipeThreshold) {
+            // Swipe right - previous chart
+            if (window.responsesState.currentChartIndex > 0) {
+                window.responsesState.currentChartIndex--;
+                scrollToCurrentChart();
+                updateChartIndicators();
+            }
+        }
+    }
+}
+
+function scrollToCurrentChart() {
+    const chartsWrapper = document.getElementById('charts-wrapper');
+    const chartContainers = document.querySelectorAll('.chart-container');
+    
+    if (!chartsWrapper || chartContainers.length === 0) return;
+    
+    const index = window.responsesState.currentChartIndex;
+    if (index >= 0 && index < chartContainers.length) {
+        const chartContainer = chartContainers[index];
+        chartsWrapper.scrollTo({
+            left: chartContainer.offsetLeft - chartsWrapper.offsetLeft,
+            behavior: 'smooth'
+        });
+    }
+}
+
+function updateChartIndicators() {
+    const indicators = document.querySelectorAll('.chart-indicator');
+    const currentIndex = window.responsesState.currentChartIndex;
+    
+    indicators.forEach((indicator, index) => {
+        if (index === currentIndex) {
+            indicator.classList.add('active');
+        } else {
+            indicator.classList.remove('active');
+        }
+    });
+}
+
+function createPieChart(question, responses) {
+    const ctx = document.getElementById(`chart-${question.id}`);
+    if (!ctx) return;
+    
+    // Count responses for each option
+    const counts = {};
+    
+    // Initialize counts for all options
+    if (question.options) {
+        question.options.forEach(option => {
+            counts[option.label] = 0;
+        });
+    }
+    
+    // Count responses
+    responses.forEach(response => {
+        const answer = response.answers[question.id];
+        if (answer) {
+            // Get the label for the selected value
+            let label = answer;
+            if (question.options) {
+                const option = question.options.find(opt => opt.value === answer);
+                if (option) {
+                    label = option.label;
+                }
+            }
+            
+            if (label) {
+                counts[label] = (counts[label] || 0) + 1;
+            }
+        }
+    });
+    
+    // Prepare chart data
+    const labels = Object.keys(counts);
+    const data = labels.map(label => counts[label]);
+    
+    // Create chart
+    const pieChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.7)',
+                    'rgba(16, 185, 129, 0.7)',
+                    'rgba(245, 158, 11, 0.7)',
+                    'rgba(239, 68, 68, 0.7)',
+                    'rgba(139, 92, 246, 0.7)',
+                    'rgba(236, 72, 153, 0.7)',
+                    'rgba(14, 165, 233, 0.7)',
+                    'rgba(168, 85, 247, 0.7)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Store chart instance
+    window.responsesState.charts[question.id] = pieChart;
+}
+
+function createBarChart(question, responses) {
+    const ctx = document.getElementById(`chart-${question.id}`);
+    if (!ctx) return;
+    
+    // Count responses for each option
+    const counts = {};
+    
+    // Initialize counts for all options
+    if (question.options) {
+        question.options.forEach(option => {
+            counts[option.label] = 0;
+        });
+    }
+    
+    // Count responses
+    responses.forEach(response => {
+        const answer = response.answers[question.id];
+        if (answer && Array.isArray(answer)) {
+            answer.forEach(value => {
+                // Get the label for the selected value
+                let label = value;
+                if (question.options) {
+                    const option = question.options.find(opt => opt.value === value);
+                    if (option) {
+                        label = option.label;
+                    }
+                }
+                
+                if (label) {
+                    counts[label] = (counts[label] || 0) + 1;
+                }
+            });
+        }
+    });
+    
+    // Prepare chart data
+    const labels = Object.keys(counts);
+    const data = labels.map(label => counts[label]);
+    
+    // Create chart
+    const barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Responses',
+                data: data,
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                },
+                x: {
+                    ticks: {
+                        autoSkip: true,
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Store chart instance
+    window.responsesState.charts[question.id] = barChart;
+}
+
+function createRatingChart(question, responses) {
+    const ctx = document.getElementById(`chart-${question.id}`);
+    if (!ctx) return;
+    
+    // Count responses for each rating value
+    const counts = {};
+    
+    // Get min and max values
+    const minValue = question.min_value || 1;
+    const maxValue = question.max_value || 5;
+    
+    // Initialize counts for all possible values
+    for (let i = minValue; i <= maxValue; i++) {
+        counts[i] = 0;
+    }
+    
+    // Count responses
+    responses.forEach(response => {
+        const answer = response.answers[question.id];
+        if (answer !== undefined && answer !== null) {
+            // Convert to number if it's a string
+            const value = typeof answer === 'string' ? parseInt(answer, 10) : answer;
+            if (!isNaN(value) && counts[value] !== undefined) {
+                counts[value]++;
+            }
+        }
+    });
+    
+    // Prepare chart data
+    const labels = Object.keys(counts).map(v => parseInt(v, 10));
+    const data = labels.map(label => counts[label]);
+    
+    // Calculate average rating
+    let total = 0;
+    let count = 0;
+    labels.forEach((label, index) => {
+        total += label * data[index];
+        count += data[index];
+    });
+    const average = count > 0 ? (total / count).toFixed(1) : 'N/A';
+    
+    // Create chart
+    const ratingChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Responses',
+                data: data,
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: `Average: ${average}`,
+                    position: 'bottom',
+                    padding: {
+                        top: 10
+                    },
+                    font: {
+                        size: 14
+                    }
+                }
+            }
+        }
+    });
+    
+    // Store chart instance
+    window.responsesState.charts[question.id] = ratingChart;
+}
+
+function getOptionLabel(value, question) {
+    if (!question.options) return value;
+    
+    const option = question.options.find(opt => opt.value === value);
+    return option ? option.label : value;
+}
+
 function applyFilters(responses) {
     const { dateRange, search } = window.responsesState.filter;
     
@@ -188,6 +765,17 @@ function applyFilters(responses) {
     if (search) {
         const searchLower = search.toLowerCase();
         filtered = filtered.filter(response => {
+            // Search in response ID
+            if (response._id.toLowerCase().includes(searchLower)) {
+                return true;
+            }
+            
+            // Search in submission date
+            const date = new Date(response.created_at).toLocaleString().toLowerCase();
+            if (date.includes(searchLower)) {
+                return true;
+            }
+            
             // Search in all answer values
             for (const [questionId, answer] of Object.entries(response.answers)) {
                 if (typeof answer === 'string' && answer.toLowerCase().includes(searchLower)) {
@@ -198,6 +786,11 @@ function applyFilters(responses) {
                         if (typeof item === 'string' && item.toLowerCase().includes(searchLower)) {
                             return true;
                         }
+                    }
+                } else if (typeof answer === 'object' && answer !== null) {
+                    // Handle file upload objects
+                    if (answer.filename && answer.filename.toLowerCase().includes(searchLower)) {
+                        return true;
                     }
                 }
             }
@@ -291,7 +884,7 @@ function renderTableView(responses) {
             
             // Start with basic columns
             let rowHTML = `
-                <td>${response._id.substring(0, 8)}...</td>
+                <td><span class="response-id" title="${response._id}">${response._id.substring(0, 8)}...</span></td>
                 <td><span class="response-date">${formattedDate}</span></td>
             `;
             
@@ -299,23 +892,7 @@ function renderTableView(responses) {
             const questions = window.responsesState.form.questions.slice(0, 4);
             questions.forEach(question => {
                 const answer = response.answers[question.id] || "";
-                let displayAnswer = "";
-                
-                if (Array.isArray(answer)) {
-                    // For multiple choice or checkbox answers
-                    displayAnswer = answer.join(", ");
-                } else if (typeof answer === "object") {
-                    // For complex answers
-                    displayAnswer = JSON.stringify(answer);
-                } else {
-                    // For simple answers
-                    displayAnswer = answer.toString();
-                }
-                
-                // Truncate long answers
-                if (displayAnswer.length > 30) {
-                    displayAnswer = displayAnswer.substring(0, 30) + "...";
-                }
+                let displayAnswer = formatAnswerForDisplay(answer, question, response._id);
                 
                 rowHTML += `<td>${displayAnswer}</td>`;
             });
@@ -324,13 +901,10 @@ function renderTableView(responses) {
             rowHTML += `
                 <td>
                     <div class="response-actions">
-                        <button class="action-btn view-response" data-index="${startIndex + index}">
+                        <button class="action-btn view-response" data-index="${startIndex + index}" title="View Details">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         </button>
-                        <button class="action-btn edit-response" data-id="${response._id}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                        </button>
-                        <button class="action-btn delete delete-response" data-id="${response._id}">
+                        <button class="action-btn delete delete-response" data-id="${response._id}" title="Delete Response">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                         </button>
                     </div>
@@ -340,6 +914,88 @@ function renderTableView(responses) {
             row.innerHTML = rowHTML;
             tableBody.appendChild(row);
         });
+    }
+}
+
+function formatAnswerForDisplay(answer, question, responseId) {
+    if (answer === undefined || answer === null || answer === "") {
+        return '<span class="no-answer">Not answered</span>';
+    }
+    
+    switch (question.type) {
+        case 'multiple_choice':
+        case 'dropdown':
+            // For single-select questions, find the label for the selected value
+            if (question.options) {
+                const selectedOption = question.options.find(opt => opt.value === answer);
+                if (selectedOption) {
+                    return `<span class="choice-answer-preview">${selectedOption.label}</span>`;
+                }
+            }
+            return `<span class="choice-answer-preview">${answer}</span>`;
+            
+        case 'checkbox':
+            // For multi-select questions
+            if (Array.isArray(answer)) {
+                if (answer.length === 0) {
+                    return '<span class="no-answer">None selected</span>';
+                }
+                
+                // Map values to labels if options exist
+                if (question.options) {
+                    const selectedLabels = answer.map(value => {
+                        const option = question.options.find(opt => opt.value === value);
+                        return option ? option.label : value;
+                    });
+                    
+                    if (selectedLabels.length === 1) {
+                        return `<span class="choice-answer-preview">${selectedLabels[0]}</span>`;
+                    }
+                    return `<span class="choice-answer-preview">${selectedLabels.length} options selected</span>`;
+                }
+                
+                if (answer.length === 1) {
+                    return `<span class="choice-answer-preview">${answer[0]}</span>`;
+                }
+                return `<span class="choice-answer-preview">${answer.length} options selected</span>`;
+            }
+            return `<span class="choice-answer-preview">${answer}</span>`;
+            
+        case 'rating':
+        case 'scale':
+            // For rating questions
+            return `<span class="rating-answer-preview">${answer} / ${question.max_value || 5}</span>`;
+            
+        case 'file':
+            // For file uploads
+            if (typeof answer === 'object' && answer.file_id) {
+                const fileKey = `${responseId}_${question.id}`;
+                const fileInfo = window.responsesState.fileDownloads[fileKey];
+                
+                if (fileInfo) {
+                    return `<a href="${fileInfo.url}" target="_blank" class="file-download-link" data-key="${fileKey}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        ${answer.filename || 'Download'}
+                    </a>`;
+                }
+                
+                return '<span class="file-answer">File uploaded</span>';
+            }
+            return '<span class="no-answer">No file</span>';
+            
+        case 'paragraph':
+            // For long text, truncate
+            if (typeof answer === 'string' && answer.length > 50) {
+                return `<span class="text-answer" title="${answer.replace(/"/g, '&quot;')}">${answer.substring(0, 50)}...</span>`;
+            }
+            return `<span class="text-answer">${answer}</span>`;
+            
+        default:
+            // For text, email, number, etc.
+            if (typeof answer === 'string' && answer.length > 30) {
+                return `<span class="text-answer" title="${answer.replace(/"/g, '&quot;')}">${answer.substring(0, 30)}...</span>`;
+            }
+            return `<span class="text-answer">${answer}</span>`;
     }
 }
 
@@ -441,12 +1097,20 @@ function renderResponseDetails(response) {
         switch (question.type) {
             case 'multiple_choice':
                 answerElement.className = 'choice-answer';
-                // For multiple choice, answer is a single string
+                // Get the label for the selected value
+                let displayAnswer = answer;
+                if (question.options) {
+                    const selectedOption = question.options.find(opt => opt.value === answer);
+                    if (selectedOption) {
+                        displayAnswer = selectedOption.label;
+                    }
+                }
+                
                 const choiceItem = document.createElement('div');
                 choiceItem.className = 'choice-item';
                 choiceItem.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-                    ${answer}
+                    ${displayAnswer}
                 `;
                 answerElement.appendChild(choiceItem);
                 break;
@@ -456,11 +1120,20 @@ function renderResponseDetails(response) {
                 // For checkboxes, answer is an array of strings
                 if (Array.isArray(answer)) {
                     answer.forEach(item => {
+                        // Get the label for the selected value
+                        let displayItem = item;
+                        if (question.options) {
+                            const selectedOption = question.options.find(opt => opt.value === item);
+                            if (selectedOption) {
+                                displayItem = selectedOption.label;
+                            }
+                        }
+                        
                         const checkItem = document.createElement('div');
                         checkItem.className = 'choice-item';
                         checkItem.innerHTML = `
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                            ${item}
+                            ${displayItem}
                         `;
                         answerElement.appendChild(checkItem);
                     });
@@ -479,12 +1152,52 @@ function renderResponseDetails(response) {
                 
             case 'file':
                 answerElement.className = 'response-files';
-                // For files, we would show a link to download the file
-                // This depends on how file uploads are handled in your API
+                // For files, we show a link to download the file
+                if (typeof answer === 'object' && answer.file_id) {
+                    const fileKey = `${response._id}_${question.id}`;
+                    const fileInfo = window.responsesState.fileDownloads[fileKey];
+                    
+                    if (fileInfo) {
+                        // Format file size
+                        const fileSize = formatFileSize(fileInfo.size);
+                        
+                        answerElement.innerHTML = `
+                            <div class="file-preview">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                <div>
+                                    <a href="${fileInfo.url}" target="_blank" class="file-download-link" data-key="${fileKey}">${fileInfo.filename}</a>
+                                    <div class="file-meta">${fileSize}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        answerElement.innerHTML = `
+                            <div class="file-preview">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                <div>File uploaded</div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    answerElement.innerHTML = `<div class="no-file">No file uploaded</div>`;
+                }
+                break;
+                
+            case 'dropdown':
+                answerElement.className = 'dropdown-answer';
+                // Get the label for the selected value
+                let dropdownValue = answer;
+                if (question.options) {
+                    const selectedOption = question.options.find(opt => opt.value === answer);
+                    if (selectedOption) {
+                        dropdownValue = selectedOption.label;
+                    }
+                }
+                
                 answerElement.innerHTML = `
-                    <div class="file-preview">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        <a href="${answer}" target="_blank">Download File</a>
+                    <div class="selected-option">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        ${dropdownValue}
                     </div>
                 `;
                 break;
@@ -499,11 +1212,27 @@ function renderResponseDetails(response) {
     });
 }
 
+function formatFileSize(bytes) {
+    if (bytes === 0 || !bytes) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 function updatePagination() {
     const currentPageEl = document.getElementById("current-page");
     const totalPagesEl = document.getElementById("total-pages");
     const prevPageBtn = document.getElementById("prev-page");
     const nextPageBtn = document.getElementById("next-page");
+    const paginationEl = document.getElementById("responses-pagination");
+    
+    // Hide pagination if in individual view
+    if (paginationEl) {
+        paginationEl.style.display = window.responsesState.currentView === "table" ? "flex" : "none";
+    }
     
     if (currentPageEl) currentPageEl.textContent = window.responsesState.currentPage;
     if (totalPagesEl) totalPagesEl.textContent = window.responsesState.totalPages;
@@ -513,6 +1242,23 @@ function updatePagination() {
 }
 
 function setupEventListeners() {
+    // Mobile sidebar toggle
+    const sidebarToggle = document.querySelector('.sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+    }
+    
+    // Logout button
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            localStorage.removeItem('token');
+            window.location.href = 'login.html';
+        });
+    }
+    
     // View toggle
     const viewFilter = document.getElementById("view-filter");
     if (viewFilter) {
@@ -531,6 +1277,9 @@ function setupEventListeners() {
             window.responsesState.currentPage = 1; // Reset to first page
             const filteredResponses = applyFilters(window.responsesState.responses);
             renderResponses(filteredResponses);
+            
+            // Update charts with filtered data
+            generateCharts(filteredResponses);
         });
     }
     
@@ -542,6 +1291,9 @@ function setupEventListeners() {
             window.responsesState.currentPage = 1; // Reset to first page
             const filteredResponses = applyFilters(window.responsesState.responses);
             renderResponses(filteredResponses);
+            
+            // Update charts with filtered data
+            generateCharts(filteredResponses);
         }, 300));
     }
     
@@ -617,16 +1369,18 @@ function setupEventListeners() {
             openResponseModal(index);
         }
         
-        // Edit response
-        if (e.target.closest(".edit-response")) {
-            const responseId = e.target.closest(".edit-response").dataset.id;
-            window.location.href = `edit-response.html?formId=${window.responsesState.form._id}&responseId=${responseId}`;
-        }
-        
         // Delete response
         if (e.target.closest(".delete-response")) {
             const responseId = e.target.closest(".delete-response").dataset.id;
             openDeleteConfirmModal(responseId);
+        }
+        
+        // File download links
+        if (e.target.closest(".file-download-link")) {
+            e.preventDefault();
+            const link = e.target.closest(".file-download-link");
+            const fileKey = link.dataset.key;
+            downloadFile(fileKey);
         }
     });
     
@@ -642,6 +1396,23 @@ function setupEventListeners() {
     
     // Delete confirmation modal
     setupDeleteConfirmModal();
+    
+    // Listen for window resize to adjust charts
+    window.addEventListener('resize', debounce(() => {
+        // Reposition chart scrolling if needed
+        scrollToCurrentChart();
+    }, 250));
+}
+
+function downloadFile(fileKey) {
+    const fileInfo = window.responsesState.fileDownloads[fileKey];
+    if (!fileInfo || !fileInfo.url) {
+        showNotification("File information not available", "error");
+        return;
+    }
+    
+    // Open the file URL in a new tab
+    window.open(fileInfo.url, '_blank');
 }
 
 function openResponseModal(index) {
@@ -688,11 +1459,7 @@ function openResponseModal(index) {
     window.responsesState.form.questions.forEach(question => {
         const answer = response.answers[question.id];
         
-        if (answer === undefined || answer === null) {
-            // Skip unanswered questions
-            return;
-        }
-        
+        // Always show all questions in the modal, even if not answered
         const questionElement = document.createElement('div');
         questionElement.className = 'response-question';
         
@@ -704,57 +1471,141 @@ function openResponseModal(index) {
         
         // Answer content based on question type
         const answerElement = document.createElement('div');
-        answerElement.className = 'question-answer';
         
-        // Render answer based on question type (same as in renderResponseDetails)
-        switch (question.type) {
-            case 'multiple_choice':
-                answerElement.className = 'choice-answer';
-                const choiceItem = document.createElement('div');
-                choiceItem.className = 'choice-item';
-                choiceItem.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-                    ${answer}
-                `;
-                answerElement.appendChild(choiceItem);
-                break;
-                
-            case 'checkbox':
-                answerElement.className = 'choice-answer';
-                if (Array.isArray(answer)) {
-                    answer.forEach(item => {
+        if (answer === undefined || answer === null) {
+            answerElement.className = 'question-answer no-answer';
+            answerElement.textContent = 'Not answered';
+        } else {
+            answerElement.className = 'question-answer';
+            
+            // Render answer based on question type (same as in renderResponseDetails)
+            switch (question.type) {
+                case 'multiple_choice':
+                    answerElement.className = 'choice-answer';
+                    // Get the label for the selected value
+                    let displayAnswer = answer;
+                    if (question.options) {
+                        const selectedOption = question.options.find(opt => opt.value === answer);
+                        if (selectedOption) {
+                            displayAnswer = selectedOption.label;
+                        }
+                    }
+                    
+                    const choiceItem = document.createElement('div');
+                    choiceItem.className = 'choice-item';
+                    choiceItem.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                        ${displayAnswer}
+                    `;
+                    answerElement.appendChild(choiceItem);
+                    break;
+                    
+                case 'checkbox':
+                    answerElement.className = 'choice-answer';
+                    if (Array.isArray(answer)) {
+                        answer.forEach(item => {
+                            // Get the label for the selected value
+                            let displayItem = item;
+                            if (question.options) {
+                                const selectedOption = question.options.find(opt => opt.value === item);
+                                if (selectedOption) {
+                                    displayItem = selectedOption.label;
+                                }
+                            }
+                            
+                            const checkItem = document.createElement('div');
+                            checkItem.className = 'choice-item';
+                            checkItem.innerHTML = `
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                                ${displayItem}
+                            `;
+                            answerElement.appendChild(checkItem);
+                        });
+                    } else {
+                        // Handle case where checkbox answer is not an array
+                        // Get the label for the selected value
+                        let displayItem = answer;
+                        if (question.options) {
+                            const selectedOption = question.options.find(opt => opt.value === answer);
+                            if (selectedOption) {
+                                displayItem = selectedOption.label;
+                            }
+                        }
+                        
                         const checkItem = document.createElement('div');
                         checkItem.className = 'choice-item';
                         checkItem.innerHTML = `
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                            ${item}
+                            ${displayItem}
                         `;
                         answerElement.appendChild(checkItem);
-                    });
-                }
-                break;
-                
-            case 'rating':
-            case 'scale':
-                answerElement.className = 'rating-answer';
-                answerElement.innerHTML = `
-                    <span class="rating-value">${answer}</span>
-                    <span class="rating-scale">/ ${question.max_value || 5}</span>
-                `;
-                break;
-                
-            case 'file':
-                answerElement.className = 'response-files';
-                answerElement.innerHTML = `
-                    <div class="file-preview">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        <a href="${answer}" target="_blank">Download File</a>
-                    </div>
-                `;
-                break;
-                
-            default:
-                answerElement.textContent = answer;
+                    }
+                    break;
+                    
+                case 'rating':
+                case 'scale':
+                    answerElement.className = 'rating-answer';
+                    answerElement.innerHTML = `
+                        <span class="rating-value">${answer}</span>
+                        <span class="rating-scale">/ ${question.max_value || 5}</span>
+                    `;
+                    break;
+                    
+                case 'file':
+                    answerElement.className = 'response-files';
+                    if (typeof answer === 'object' && answer.file_id) {
+                        const fileKey = `${response._id}_${question.id}`;
+                        const fileInfo = window.responsesState.fileDownloads[fileKey];
+                        
+                        if (fileInfo) {
+                            // Format file size
+                            const fileSize = formatFileSize(fileInfo.size);
+                            
+                            answerElement.innerHTML = `
+                                <div class="file-preview">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                    <div>
+                                        <a href="${fileInfo.url}" target="_blank" class="file-download-link" data-key="${fileKey}">${fileInfo.filename}</a>
+                                        <div class="file-meta">${fileSize}</div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            answerElement.innerHTML = `
+                                <div class="file-preview">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                    <div>File uploaded</div>
+                                </div>
+                            `;
+                        }
+                    } else {
+                        answerElement.innerHTML = `<div class="no-file">No file uploaded</div>`;
+                    }
+                    break;
+                    
+                case 'dropdown':
+                    answerElement.className = 'dropdown-answer';
+                    // Get the label for the selected value
+                    let dropdownValue = answer;
+                    if (question.options) {
+                        const selectedOption = question.options.find(opt => opt.value === answer);
+                        if (selectedOption) {
+                            dropdownValue = selectedOption.label;
+                        }
+                    }
+                    
+                    answerElement.innerHTML = `
+                        <div class="selected-option">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            ${dropdownValue}
+                        </div>
+                    `;
+                    break;
+                    
+                default:
+                    // For text, paragraph, email, etc.
+                    answerElement.textContent = answer;
+            }
         }
         
         questionElement.appendChild(answerElement);
@@ -818,11 +1669,16 @@ function setupShareFormModal() {
                 document.execCommand("copy");
                 
                 // Show copied feedback
-                const originalText = this.textContent;
-                this.textContent = "Copied!";
+                const originalText = this.innerHTML;
+                this.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Copied!
+                `;
                 setTimeout(() => {
-                    this.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy`;
+                    this.innerHTML = originalText;
                 }, 2000);
+                
+                showNotification("Link copied to clipboard", "success");
             }
         });
     }
@@ -838,7 +1694,14 @@ function setupShareFormModal() {
             const formId = modal.dataset.formId;
             const token = localStorage.getItem("token");
             
+            if (!customSlug) {
+                showNotification("Please enter a custom URL", "warning");
+                return;
+            }
+            
             try {
+                showLoadingIndicator();
+                
                 // Get current form data
                 const form = window.responsesState.form;
                 
@@ -870,16 +1733,13 @@ function setupShareFormModal() {
                     window.responsesState.form = updatedForm;
                 }
                 
-                // Show success feedback
-                const originalText = this.textContent;
-                this.textContent = "Saved!";
-                setTimeout(() => {
-                    this.textContent = originalText;
-                }, 2000);
+                hideLoadingIndicator();
+                showNotification("Custom URL saved successfully", "success");
                 
             } catch (error) {
+                hideLoadingIndicator();
                 console.error("Error updating custom URL:", error);
-                alert("Failed to update custom URL. It may already be in use.");
+                showNotification("Failed to update custom URL. It may already be in use.", "error");
             }
         });
     }
@@ -973,6 +1833,8 @@ function setupDeleteConfirmModal() {
             const formId = window.responsesState.form._id;
             
             try {
+                showLoadingIndicator();
+                
                 const response = await fetch(`${API_URL}/forms/${formId}/responses/${responseId}`, {
                     method: "DELETE",
                     headers: {
@@ -995,12 +1857,19 @@ function setupDeleteConfirmModal() {
                 window.responsesState.form.response_count = Math.max(0, window.responsesState.form.response_count - 1);
                 updateFormDetails(window.responsesState.form);
                 
+                // Update charts with new data
+                generateCharts(window.responsesState.responses);
+                
                 // Close the modal
                 closeAllModals();
+                hideLoadingIndicator();
+                
+                showNotification("Response deleted successfully", "success");
                 
             } catch (error) {
+                hideLoadingIndicator();
                 console.error("Error deleting response:", error);
-                alert("Failed to delete response. Please try again.");
+                showNotification("Failed to delete response: " + error.message, "error");
             }
         });
     }
@@ -1014,65 +1883,83 @@ function closeAllModals() {
 
 function exportResponsesToCSV() {
     if (!window.responsesState.form || !window.responsesState.responses.length) {
-        alert("No responses to export");
+        showNotification("No responses to export", "warning");
         return;
     }
     
-    // Get all responses (no pagination for export)
-    const responses = window.responsesState.responses;
-    const form = window.responsesState.form;
-    
-    // Create CSV header row
-    let csvContent = "data:text/csv;charset=utf-8,";
-    
-    // Add basic headers
-    let headers = ["Response ID", "Submission Date"];
-    
-    // Add a column for each question
-    form.questions.forEach(question => {
-        headers.push(question.title.replace(/,/g, " ")); // Remove commas from headers
-    });
-    
-    csvContent += headers.join(",") + "\r\n";
-    
-    // Add each response as a row
-    responses.forEach(response => {
-        const date = new Date(response.created_at).toLocaleString();
-        let row = [response._id, date];
+    try {
+        showLoadingIndicator();
         
-        // Add answer for each question
+        // Get all responses (no pagination for export)
+        const responses = window.responsesState.responses;
+        const form = window.responsesState.form;
+        
+        // Create CSV header row
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Add basic headers
+        let headers = ["Response ID", "Submission Date"];
+        
+        // Add a column for each question
         form.questions.forEach(question => {
-            const answer = response.answers[question.id];
-            let formattedAnswer = "";
-            
-            if (answer === undefined || answer === null) {
-                formattedAnswer = "";
-            } else if (Array.isArray(answer)) {
-                formattedAnswer = answer.join("; ").replace(/,/g, ";"); // Replace commas with semicolons
-            } else {
-                formattedAnswer = String(answer).replace(/,/g, " "); // Remove commas from answers
-            }
-            
-            // Wrap in quotes to handle multiline text
-            formattedAnswer = `"${formattedAnswer}"`;
-            row.push(formattedAnswer);
+            headers.push(question.title.replace(/,/g, " ")); // Remove commas from headers
         });
         
-        csvContent += row.join(",") + "\r\n";
-    });
-    
-    // Create download link
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${form.title}_responses_${new Date().toLocaleDateString()}.csv`);
-    document.body.appendChild(link);
-    
-    // Trigger download
-    link.click();
-    
-    // Clean up
-    document.body.removeChild(link);
+        csvContent += headers.join(",") + "\r\n";
+        
+        // Add each response as a row
+        responses.forEach(response => {
+            const date = new Date(response.created_at).toLocaleString();
+            let row = [response._id, date];
+            
+            // Add answer for each question
+            form.questions.forEach(question => {
+                const answer = response.answers[question.id];
+                let formattedAnswer = "";
+                
+                if (answer === undefined || answer === null) {
+                    formattedAnswer = "";
+                } else if (Array.isArray(answer)) {
+                    formattedAnswer = answer.join("; ").replace(/,/g, ";"); // Replace commas with semicolons
+                } else if (typeof answer === 'object') {
+                    // Handle file uploads
+                    if (answer.file_id) {
+                        formattedAnswer = answer.filename || "File uploaded";
+                    } else {
+                        formattedAnswer = JSON.stringify(answer).replace(/,/g, ";");
+                    }
+                } else {
+                    formattedAnswer = String(answer).replace(/,/g, " "); // Remove commas from answers
+                }
+                
+                // Wrap in quotes to handle multiline text
+                formattedAnswer = `"${formattedAnswer}"`;
+                row.push(formattedAnswer);
+            });
+            
+            csvContent += row.join(",") + "\r\n";
+        });
+        
+        // Create download link
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `${form.title}_responses_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`);
+        document.body.appendChild(link);
+        
+        // Trigger download
+        link.click();
+        
+        // Clean up
+        document.body.removeChild(link);
+        hideLoadingIndicator();
+        showNotification("CSV file exported successfully", "success");
+        
+    } catch (error) {
+        hideLoadingIndicator();
+        console.error("Error exporting responses:", error);
+        showNotification("Failed to export responses: " + error.message, "error");
+    }
 }
 
 // Utility function for debouncing
@@ -1085,6 +1972,59 @@ function debounce(func, wait) {
     };
 }
 
-function showErrorMessage(message) {
-    alert(message);
+function showNotification(message, type = "info") {
+    const container = document.getElementById("notification-container");
+    if (!container) return;
+    
+    const notification = document.createElement("div");
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    container.appendChild(notification);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        notification.style.opacity = "0";
+        notification.style.transform = "translateX(100%)";
+        
+        // Remove from DOM after animation completes
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 4000);
 }
+
+function showLoadingIndicator() {
+    const loadingOverlay = document.getElementById("loading-overlay");
+    if (loadingOverlay) {
+        loadingOverlay.classList.add("active");
+    }
+}
+
+function hideLoadingIndicator() {
+    const loadingOverlay = document.getElementById("loading-overlay");
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove("active");
+    }
+}
+
+// Initialize when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle clicks outside modals to close them
+    window.addEventListener('click', function(event) {
+        document.querySelectorAll('.modal.active').forEach(modal => {
+            if (event.target === modal) {
+                closeAllModals();
+            }
+        });
+    });
+    
+    // Add escape key listener to close modals
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeAllModals();
+        }
+    });
+});
