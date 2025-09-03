@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Form - FlyForms</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/forms.css">
+    <link rel="stylesheet" href="css/edit-form.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="dashboard.html" class="sidebar-logo">FlyForms</a>
+                <button class="sidebar-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="dashboard.html">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li class="active">
+                        <a href="forms.html">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            My Forms
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="settings.html" class="sidebar-settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    Settings
+                </a>
+                <button id="logout-btn" class="sidebar-logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    Logout
+                </button>
+            </div>
+        </aside>
+
+        <main class="dashboard-main">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <h1 id="form-title-header">Edit Form</h1>
+                </div>
+                <div class="header-right">
+                    <div class="action-buttons">
+                        <button id="preview-form-btn" class="btn btn-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            Preview
+                        </button>
+                        <button id="share-form-btn" class="btn btn-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                            Share
+                        </button>
+                        <button id="save-form-btn" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                            Save Form
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-content">
+                <div class="form-editor-container">
+                    <div class="form-editor-header">
+                        <div class="form-field">
+                            <label for="form-title-input">Form Title</label>
+                            <input type="text" id="form-title-input" placeholder="Enter form title" required>
+                        </div>
+                        <div class="form-field">
+                            <label for="form-description-input">Form Description (optional)</label>
+                            <textarea id="form-description-input" placeholder="Enter a description for your form"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="form-editor-content">
+                        <div class="form-editor-main">
+                            <div class="form-section">
+                                <div class="form-section-header">
+                                    <h3 class="form-section-title">Start Screen</h3>
+                                </div>
+                                <div class="form-field">
+                                    <label for="start-screen-title">Welcome Title</label>
+                                    <input type="text" id="start-screen-title" placeholder="Welcome to my form">
+                                </div>
+                                <div class="form-field">
+                                    <label for="start-screen-description">Welcome Message</label>
+                                    <textarea id="start-screen-description" placeholder="Add a message to introduce your form"></textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="form-section">
+                                <div class="form-section-header">
+                                    <h3 class="form-section-title">Questions</h3>
+                                </div>
+                                
+                                <div id="questions-container">
+                                    <!-- Questions will be added here dynamically -->
+                                </div>
+                                
+                                <button id="add-question-btn" class="add-question-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    Add Question
+                                </button>
+                            </div>
+                            
+                            <div class="form-section">
+                                <div class="form-section-header">
+                                    <h3 class="form-section-title">End Screen</h3>
+                                </div>
+                                <div class="form-field">
+                                    <label for="end-screen-title">Thank You Title</label>
+                                    <input type="text" id="end-screen-title" placeholder="Thank you for your submission!">
+                                </div>
+                                <div class="form-field">
+                                    <label for="end-screen-description">Thank You Message</label>
+                                    <textarea id="end-screen-description" placeholder="Add a thank you message to display after form submission"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-editor-sidebar">
+                            <div class="form-sidebar-card">
+                                <h3 class="form-sidebar-title">Form Settings</h3>
+                                <div class="form-settings-group">
+                                    <label class="form-settings-label">Status</label>
+                                    <div class="form-option">
+                                        <input type="checkbox" id="form-active" checked>
+                                        <label for="form-active">Form is active</label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-settings-group">
+                                    <label class="form-settings-label">Responses</label>
+                                    <div class="form-field">
+                                        <input type="number" id="max-responses" placeholder="Unlimited" min="1">
+                                        <small>Maximum number of responses (leave empty for unlimited)</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-settings-group">
+                                    <label class="form-settings-label">Expiration</label>
+                                    <div class="form-field">
+                                        <input type="date" id="expiration-date">
+                                        <small>Date when form will become inactive (leave empty for no expiration)</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-settings-group">
+                                    <label class="form-settings-label">Theme Color</label>
+                                    <div class="theme-colors">
+                                        <div class="theme-color active" style="background-color: #4361ee;" data-color="#4361ee"></div>
+                                        <div class="theme-color" style="background-color: #3a0ca3;" data-color="#3a0ca3"></div>
+                                        <div class="theme-color" style="background-color: #4cc9f0;" data-color="#4cc9f0"></div>
+                                        <div class="theme-color" style="background-color: #4d908e;" data-color="#4d908e"></div>
+                                        <div class="theme-color" style="background-color: #f72585;" data-color="#f72585"></div>
+                                        <div class="theme-color" style="background-color: #fb8500;" data-color="#fb8500"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-sidebar-card">
+                                <h3 class="form-sidebar-title">Question Types</h3>
+                                <div class="question-types-list">
+                                    <div class="question-type-item" data-type="text">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                                        </div>
+                                        <span class="question-type-label">Short Text</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="paragraph">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="10" x2="3" y2="10"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>
+                                        </div>
+                                        <span class="question-type-label">Paragraph</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="multiple_choice">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                                        </div>
+                                        <span class="question-type-label">Multiple Choice</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="checkbox">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                                        </div>
+                                        <span class="question-type-label">Checkbox</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="dropdown">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                                        </div>
+                                        <span class="question-type-label">Dropdown</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="date">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                        </div>
+                                        <span class="question-type-label">Date</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="email">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                        </div>
+                                        <span class="question-type-label">Email</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="number">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                        </div>
+                                        <span class="question-type-label">Number</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="rating">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                        </div>
+                                        <span class="question-type-label">Rating</span>
+                                    </div>
+                                    <div class="question-type-item" data-type="file">
+                                        <div class="question-type-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                        </div>
+                                        <span class="question-type-label">File Upload</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Question Modal -->
+    <div class="modal" id="add-question-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Question</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="question-types-grid">
+                    <div class="question-type-card" data-type="text">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                        </div>
+                        <h4>Short Text</h4>
+                        <p>For collecting brief text responses</p>
+                    </div>
+                    <div class="question-type-card" data-type="paragraph">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="10" x2="3" y2="10"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>
+                        </div>
+                        <h4>Paragraph</h4>
+                        <p>For collecting longer text responses</p>
+                    </div>
+                    <div class="question-type-card" data-type="multiple_choice">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                        </div>
+                        <h4>Multiple Choice</h4>
+                        <p>For selecting one option from a list</p>
+                    </div>
+                    <div class="question-type-card" data-type="checkbox">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                        </div>
+                        <h4>Checkbox</h4>
+                        <p>For selecting multiple options from a list</p>
+                    </div>
+                    <div class="question-type-card" data-type="dropdown">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                        </div>
+                        <h4>Dropdown</h4>
+                        <p>For selecting one option from a dropdown menu</p>
+                    </div>
+                    <div class="question-type-card" data-type="date">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        </div>
+                        <h4>Date</h4>
+                        <p>For collecting date information</p>
+                    </div>
+                    <div class="question-type-card" data-type="email">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        </div>
+                        <h4>Email</h4>
+                        <p>For collecting email addresses</p>
+                    </div>
+                    <div class="question-type-card" data-type="number">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                        </div>
+                        <h4>Number</h4>
+                        <p>For collecting numeric information</p>
+                    </div>
+                    <div class="question-type-card" data-type="rating">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        </div>
+                        <h4>Rating</h4>
+                        <p>For collecting ratings on a scale</p>
+                    </div>
+                    <div class="question-type-card" data-type="file">
+                        <div class="question-type-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                        </div>
+                        <h4>File Upload</h4>
+                        <p>For collecting files and documents</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Form Modal -->
+    <div class="modal" id="preview-form-modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Form Preview</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-section">
+                    <div class="preview-header">
+                        <h2 class="preview-title" id="preview-form-title">Form Title</h2>
+                        <p class="preview-description" id="preview-form-description">Form description goes here</p>
+                    </div>
+                    <div class="preview-questions" id="preview-questions-container">
+                        <!-- Questions will be added here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Form Modal -->
+    <div class="modal" id="share-form-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Share Form</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Form Link</label>
+                    <div class="input-with-copy">
+                        <input type="text" id="form-link" readonly>
+                        <button id="copy-link" class="btn btn-small">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Custom URL (optional)</label>
+                    <div class="input-with-button">
+                        <input type="text" id="custom-url" placeholder="Enter custom URL">
+                        <button id="save-custom-url" class="btn btn-small btn-primary">Save</button>
+                    </div>
+                </div>
+                <div class="share-options">
+                    <h4>Share via</h4>
+                    <div class="share-buttons">
+                        <button class="share-btn" id="share-twitter">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg>
+                            Twitter
+                        </button>
+                        <button class="share-btn" id="share-facebook">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
+                            Facebook
+                        </button>
+                        <button class="share-btn" id="share-linkedin">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+                            LinkedIn
+                        </button>
+                    </div>
+                </div>
+                <div class="embed-options">
+                    <h4>Embed on your website</h4>
+                    <div class="input-with-copy">
+                        <input type="text" id="embed-code" readonly>
+                        <button id="copy-embed" class="btn btn-small">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth-check.js"></script>
+    <script src="js/edit-form.js"></script>
+</body>
+</html>

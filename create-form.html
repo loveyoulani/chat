@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Form - FlyForms</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/form-builder.css">
+</head>
+<body>
+    <div class="form-builder-container">
+        <header class="form-builder-header">
+            <div class="header-left">
+                <a href="forms.html" class="back-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                </a>
+                <input type="text" id="form-title" placeholder="Untitled Form" value="Untitled Form">
+            </div>
+            <div class="header-right">
+                <button id="preview-button" class="btn btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    Preview
+                </button>
+                <button id="save-button" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    Save
+                </button>
+            </div>
+        </header>
+
+        <div class="form-builder-content">
+            <aside class="form-builder-sidebar">
+                <div class="sidebar-section">
+                    <h3>Form Sections</h3>
+                    <ul class="form-sections">
+                        <li class="active" data-section="start-screen">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+                            Start Screen
+                        </li>
+                        <li data-section="questions">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            Questions
+                        </li>
+                        <li data-section="end-screen">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            End Screen
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="sidebar-section" id="questions-sidebar">
+                    <h3>Add Question</h3>
+                    <div class="question-types">
+                        <div class="question-type" data-type="text">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                            Short Text
+                        </div>
+                        <div class="question-type" data-type="paragraph">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="10" x2="3" y2="10"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>
+                            Paragraph
+                        </div>
+                        <div class="question-type" data-type="multiple_choice">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                            Multiple Choice
+                        </div>
+                        <div class="question-type" data-type="checkbox">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                            Checkbox
+                        </div>
+                        <div class="question-type" data-type="dropdown">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                            Dropdown
+                        </div>
+                        <div class="question-type" data-type="email">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                            Email
+                        </div>
+                        <div class="question-type" data-type="phone">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                            Phone
+                        </div>
+                        <div class="question-type" data-type="number">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                            Number
+                        </div>
+                        <div class="question-type" data-type="date">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            Date
+                        </div>
+                        <div class="question-type" data-type="time">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            Time
+                        </div>
+                        <div class="question-type" data-type="url">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                            URL
+                        </div>
+                        <div class="question-type" data-type="rating">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                            Rating
+                        </div>
+                        <div class="question-type" data-type="scale">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                            Scale
+                        </div>
+                        <div class="question-type" data-type="location">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            Location
+                        </div>
+                        <div class="question-type" data-type="file">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                            File Upload
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Form Settings</h3>
+                    <div class="form-settings">
+                        <div class="setting-item">
+                            <label for="max-responses">Max Responses:</label>
+                            <input type="number" id="max-responses" min="0" placeholder="Unlimited">
+                        </div>
+                        <div class="setting-item">
+                            <label for="expiration-date">Expiration Date:</label>
+                            <input type="date" id="expiration-date">
+                        </div>
+                        <div class="setting-item">
+                            <label for="custom-slug">Custom URL:</label>
+                            <input type="text" id="custom-slug" placeholder="your-form-name">
+                        </div>
+                        <div class="setting-item">
+                            <label>Theme:</label>
+                            <div class="theme-selector">
+                                <div class="theme-option active" data-theme="light">Light</div>
+                                <div class="theme-option" data-theme="dark">Dark</div>
+                                <div class="theme-option" data-theme="colorful">Colorful</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="form-builder-main">
+                <!-- Start Screen Section -->
+                <div class="builder-section active" id="start-screen-section">
+                    <div class="section-header">
+                        <h2>Start Screen</h2>
+                        <p>This is the first screen visitors will see</p>
+                    </div>
+                    <div class="section-content">
+                        <div class="form-group">
+                            <label for="start-title">Title</label>
+                            <input type="text" id="start-title" placeholder="Welcome to my form">
+                        </div>
+                        <div class="form-group">
+                            <label for="start-description">Description</label>
+                            <textarea id="start-description" placeholder="Add a description to help people understand your form"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Background Image (optional)</label>
+                            <div class="image-upload">
+                                <input type="file" id="start-bg-image" accept="image/*">
+                                <label for="start-bg-image" class="upload-label">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                    Upload Image
+                                </label>
+                                <div id="start-image-preview" class="image-preview"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="start-custom-css">Custom CSS (optional)</label>
+                            <textarea id="start-custom-css" class="code-editor" placeholder=".container { background-color: #f5f5f5; }"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Questions Section -->
+                <div class="builder-section" id="questions-section">
+                    <div class="section-header">
+                        <h2>Questions</h2>
+                        <p>Drag and drop to reorder questions</p>
+                    </div>
+                    <div class="section-content">
+                        <div id="questions-container" class="questions-container">
+                            <div class="empty-state">
+                                <div class="empty-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                </div>
+                                <h3>No questions yet</h3>
+                                <p>Add a question from the sidebar to get started</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- End Screen Section -->
+                <div class="builder-section" id="end-screen-section">
+                    <div class="section-header">
+                        <h2>End Screen</h2>
+                        <p>This is what respondents will see after submitting the form</p>
+                    </div>
+                    <div class="section-content">
+                        <div class="form-group">
+                            <label for="end-title">Title</label>
+                            <input type="text" id="end-title" placeholder="Thank you!">
+                        </div>
+                        <div class="form-group">
+                            <label for="end-description">Description</label>
+                            <textarea id="end-description" placeholder="Thank you for submitting the form!"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Background Image (optional)</label>
+                            <div class="image-upload">
+                                <input type="file" id="end-bg-image" accept="image/*">
+                                <label for="end-bg-image" class="upload-label">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                    Upload Image
+                                </label>
+                                <div id="end-image-preview" class="image-preview"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-custom-css">Custom CSS (optional)</label>
+                            <textarea id="end-custom-css" class="code-editor" placeholder=".container { background-color: #f5f5f5; }"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="dynamic-content-toggle">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="enable-dynamic-content">
+                                    <span class="toggle-text">Enable Dynamic End Screen</span>
+                                </label>
+                                <div class="toggle-info">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                    <span class="tooltip">Show different content based on form responses</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="dynamic-content-container" class="dynamic-content-container" style="display: none;">
+                            <h3>Dynamic Content Rules</h3>
+                            <p>Define different end screens based on question responses</p>
+                            
+                            <div id="dynamic-rules-list" class="dynamic-rules-list">
+                                <!-- Dynamic rules will be added here -->
+                                <div class="empty-state">
+                                    <div class="empty-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                                    </div>
+                                    <h4>No rules yet</h4>
+                                    <p>Add a rule to show different content based on responses</p>
+                                </div>
+                            </div>
+                            
+                            <button id="add-dynamic-rule" class="btn btn-outline">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                Add Rule
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question Template (Hidden) -->
+    <template id="question-template">
+        <div class="question-item" data-id="{{id}}">
+            <div class="question-header">
+                <div class="question-type-indicator">{{type-icon}}</div>
+                <div class="question-title">{{title}}</div>
+                <div class="question-actions">
+                    <button class="question-action btn-edit" title="Edit question">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </button>
+                    <button class="question-action btn-duplicate" title="Duplicate question">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                    <button class="question-action btn-delete" title="Delete question">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="question-preview">
+                {{preview-content}}
+            </div>
+            <div class="question-footer">
+                <div class="required-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" class="required-checkbox">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Required</span>
+                </div>
+                <div class="logic-toggle">
+                    <button class="btn-small btn-outline btn-logic">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                        Logic
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Question Edit Modal -->
+    <div class="modal" id="question-edit-modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Edit Question</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="edit-question-title">Question Title</label>
+                    <input type="text" id="edit-question-title" placeholder="Enter your question">
+                </div>
+                <div class="form-group">
+                    <label for="edit-question-description">Description (optional)</label>
+                    <textarea id="edit-question-description" placeholder="Add a description or instructions"></textarea>
+                </div>
+                
+                <!-- Dynamic fields based on question type -->
+                <div id="edit-question-options" class="question-options">
+                    <!-- Will be populated by JS based on question type -->
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="edit-question-required">
+                        <span>Required question</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancel-question-edit">Cancel</button>
+                <button class="btn btn-primary" id="save-question-edit">Save Question</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic Modal -->
+    <div class="modal" id="logic-modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Question Logic</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Set up conditional logic for this question. Show or hide questions based on answers.</p>
+                
+                <div id="logic-rules-container" class="logic-rules-container">
+                    <!-- Logic rules will be added here -->
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                        </div>
+                        <h4>No logic rules yet</h4>
+                        <p>Add a rule to control the flow of your form</p>
+                    </div>
+                </div>
+                
+                <button id="add-logic-rule" class="btn btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Add Logic Rule
+                </button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancel-logic">Cancel</button>
+                <button class="btn btn-primary" id="save-logic">Save Logic</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Content Rule Modal -->
+    <div class="modal" id="dynamic-rule-modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Dynamic Content Rule</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Define a rule to show different content on the end screen based on responses.</p>
+                
+                <div class="form-group">
+                    <label for="dynamic-rule-question">When question</label>
+                    <select id="dynamic-rule-question">
+                        <option value="">Select a question</option>
+                        <!-- Will be populated by JS -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dynamic-rule-condition">Condition</label>
+                    <select id="dynamic-rule-condition">
+                        <option value="equals">Equals</option>
+                        <option value="not_equals">Does not equal</option>
+                        <option value="contains">Contains</option>
+                        <option value="not_contains">Does not contain</option>
+                        <option value="greater_than">Greater than</option>
+                        <option value="less_than">Less than</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dynamic-rule-value">Value</label>
+                    <input type="text" id="dynamic-rule-value" placeholder="Enter value">
+                </div>
+                
+                <div class="form-group">
+                    <label for="dynamic-content-title">Custom End Screen Title</label>
+                    <input type="text" id="dynamic-content-title" placeholder="Enter title">
+                </div>
+                
+                <div class="form-group">
+                    <label for="dynamic-content-description">Custom End Screen Description</label>
+                    <textarea id="dynamic-content-description" placeholder="Enter description"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancel-dynamic-rule">Cancel</button>
+                <button class="btn btn-primary" id="save-dynamic-rule">Save Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div class="modal" id="preview-modal">
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <h3>Form Preview</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-container">
+                    <iframe id="preview-frame" class="preview-frame"></iframe>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="close-preview">Close Preview</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth-check.js"></script>
+    <script src="js/form-builder.js"></script>
+</body>
+</html>
