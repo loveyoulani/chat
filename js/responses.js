@@ -10,9 +10,10 @@ document.addEventListener("DOMContentLoaded", async function() {
     const urlParams = new URLSearchParams(window.location.search);
     const formId = urlParams.get("formId");
     
+    // If no form ID provided, show all responses instead of redirecting
     if (!formId) {
-        // If no form ID provided, redirect to forms page
-        window.location.href = "forms.html";
+        // Load all forms and their responses
+        loadAllResponses(token);
         return;
     }
     
@@ -1259,6 +1260,22 @@ function setupEventListeners() {
         });
     }
     
+    // Add a back button for form-specific responses
+    const headerLeft = document.querySelector('.header-left');
+    if (headerLeft) {
+        const backButton = document.createElement('a');
+        backButton.href = 'responses.html';
+        backButton.className = 'back-button';
+        backButton.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>All Responses</span>
+        `;
+        headerLeft.insertBefore(backButton, headerLeft.firstChild);
+    }
+    
     // View toggle
     const viewFilter = document.getElementById("view-filter");
     if (viewFilter) {
@@ -2007,6 +2024,236 @@ function hideLoadingIndicator() {
     const loadingOverlay = document.getElementById("loading-overlay");
     if (loadingOverlay) {
         loadingOverlay.classList.remove("active");
+    }
+}
+
+// Function to load all responses across all forms
+async function loadAllResponses(token) {
+    try {
+        // Show loading indicator
+        showLoadingIndicator();
+        
+        // Initialize state for all responses
+        window.responsesState = {
+            forms: [],
+            allResponses: [],
+            currentPage: 1,
+            totalPages: 1,
+            itemsPerPage: 10,
+            currentView: "table",
+            filter: {
+                dateRange: "all",
+                search: "",
+                formFilter: "all"
+            }
+        };
+        
+        // Fetch all forms
+        const formsResponse = await fetch(`${API_URL}/forms`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+        
+        if (!formsResponse.ok) {
+            throw new Error("Failed to fetch forms");
+        }
+        
+        const forms = await formsResponse.json();
+        window.responsesState.forms = forms;
+        
+        // Update page title
+        document.title = "All Responses | FlyForms";
+        
+        // Update header
+        const formTitleEl = document.getElementById("form-title");
+        const formMetaEl = document.getElementById("form-meta");
+        
+        if (formTitleEl) formTitleEl.textContent = "All Form Responses";
+        if (formMetaEl) formMetaEl.textContent = `${forms.length} forms`;
+        
+        // Fetch responses for each form
+        const allResponses = [];
+        let totalResponseCount = 0;
+        
+        for (const form of forms) {
+            try {
+                const responseResponse = await fetch(`${API_URL}/forms/${form._id}/responses`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    }
+                });
+                
+                if (responseResponse.ok) {
+                    const formResponses = await responseResponse.json();
+                    
+                    // Add form information to each response
+                    formResponses.forEach(response => {
+                        response.formTitle = form.title;
+                        response.formId = form._id;
+                    });
+                    
+                    allResponses.push(...formResponses);
+                    totalResponseCount += formResponses.length;
+                }
+            } catch (error) {
+                console.error(`Error fetching responses for form ${form._id}:`, error);
+            }
+        }
+        
+        window.responsesState.allResponses = allResponses;
+        
+        // Set up event listeners
+        setupAllResponsesEventListeners();
+        
+        // Render all responses
+        renderAllResponses(allResponses);
+        
+        // Hide loading indicator
+        hideLoadingIndicator();
+        
+    } catch (error) {
+        console.error("Error loading all responses:", error);
+        showNotification("Failed to load responses. Please try again.", "error");
+        hideLoadingIndicator();
+    }
+}
+
+// Function to render all responses
+function renderAllResponses(responses) {
+    // Update pagination
+    const totalItems = responses.length;
+    window.responsesState.totalPages = Math.ceil(totalItems / window.responsesState.itemsPerPage);
+    
+    if (window.responsesState.currentPage > window.responsesState.totalPages && window.responsesState.totalPages > 0) {
+        window.responsesState.currentPage = window.responsesState.totalPages;
+    }
+    
+    updatePagination();
+    
+    // Get table elements
+    const tableView = document.getElementById("responses-table-view");
+    const individualView = document.getElementById("individual-view");
+    const emptyResponses = document.getElementById("empty-responses");
+    const tableBody = document.getElementById("table-body");
+    const tableHeader = document.getElementById("table-header");
+    
+    // Show table view, hide individual view
+    if (tableView) tableView.style.display = "block";
+    if (individualView) individualView.style.display = "none";
+    
+    // If no responses, show empty state
+    if (responses.length === 0) {
+        if (emptyResponses) emptyResponses.style.display = "flex";
+        if (tableBody) tableBody.innerHTML = "";
+        return;
+    }
+    
+    // Hide empty state
+    if (emptyResponses) emptyResponses.style.display = "none";
+    
+    // Clear existing table
+    if (tableBody) tableBody.innerHTML = "";
+    
+    // Set up table headers
+    if (tableHeader) {
+        let headerHTML = `
+            <th>Form</th>
+            <th>Response ID</th>
+            <th>Submitted</th>
+            <th>Actions</th>
+        `;
+        
+        tableHeader.innerHTML = headerHTML;
+    }
+    
+    // Calculate pagination
+    const startIndex = (window.responsesState.currentPage - 1) * window.responsesState.itemsPerPage;
+    const endIndex = Math.min(startIndex + window.responsesState.itemsPerPage, responses.length);
+    const paginatedResponses = responses.slice(startIndex, endIndex);
+    
+    // Render table rows
+    if (tableBody) {
+        paginatedResponses.forEach((response, index) => {
+            const row = document.createElement("tr");
+            
+            // Format date
+            const responseDate = new Date(response.created_at);
+            const formattedDate = responseDate.toLocaleDateString() + ' ' + 
+                                responseDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            // Create row HTML
+            let rowHTML = `
+                <td><a href="responses.html?formId=${response.formId}" class="form-link">${response.formTitle}</a></td>
+                <td><span class="response-id" title="${response._id}">${response._id.substring(0, 8)}...</span></td>
+                <td><span class="response-date">${formattedDate}</span></td>
+                <td>
+                    <div class="response-actions">
+                        <a href="responses.html?formId=${response.formId}" class="action-btn view-form" title="View Form Responses">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </a>
+                    </div>
+                </td>
+            `;
+            
+            row.innerHTML = rowHTML;
+            tableBody.appendChild(row);
+        });
+    }
+}
+
+// Setup event listeners for all responses view
+function setupAllResponsesEventListeners() {
+    // Pagination
+    const prevPageBtn = document.getElementById("prev-page");
+    const nextPageBtn = document.getElementById("next-page");
+    
+    if (prevPageBtn) {
+        prevPageBtn.addEventListener("click", function() {
+            if (window.responsesState.currentPage > 1) {
+                window.responsesState.currentPage--;
+                renderAllResponses(window.responsesState.allResponses);
+            }
+        });
+    }
+    
+    if (nextPageBtn) {
+        nextPageBtn.addEventListener("click", function() {
+            if (window.responsesState.currentPage < window.responsesState.totalPages) {
+                window.responsesState.currentPage++;
+                renderAllResponses(window.responsesState.allResponses);
+            }
+        });
+    }
+    
+    // Search responses
+    const searchInput = document.getElementById("search-responses");
+    if (searchInput) {
+        searchInput.addEventListener("input", debounce(function() {
+            const searchTerm = this.value.toLowerCase();
+            const filteredResponses = window.responsesState.allResponses.filter(response => {
+                // Search in form title
+                if (response.formTitle.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Search in response ID
+                if (response._id.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // Search in submission date
+                const date = new Date(response.created_at).toLocaleString().toLowerCase();
+                if (date.includes(searchTerm)) {
+                    return true;
+                }
+                
+                return false;
+            });
+            
+            window.responsesState.currentPage = 1; // Reset to first page
+            renderAllResponses(filteredResponses);
+        }, 300));
     }
 }
 

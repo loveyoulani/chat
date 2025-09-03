@@ -132,8 +132,17 @@ document.addEventListener("DOMContentLoaded", async function() {
                     renderQuestion(question, index);
                 });
                 
-                // Update question counter
-                window.formBuilderState.questionCounter = formData.questions.length;
+                // Update question counter - find the highest number in question titles
+                const questionNumbers = formData.questions
+                    .map(q => {
+                        const match = q.title.match(/Question (\d+)/);
+                        return match ? parseInt(match[1]) : 0;
+                    })
+                    .filter(num => !isNaN(num));
+                
+                window.formBuilderState.questionCounter = questionNumbers.length > 0 
+                    ? Math.max(...questionNumbers) 
+                    : formData.questions.length;
             }
             
             hideLoadingIndicator();
@@ -1028,6 +1037,9 @@ function deleteQuestion(questionId, index) {
     questionsContainer.innerHTML = "";
     
     if (window.formBuilderState.form.questions.length === 0) {
+        // Reset question counter when all questions are deleted
+        window.formBuilderState.questionCounter = 0;
+        
         // Show empty state if no questions left
         questionsContainer.innerHTML = `
             <div class="empty-state">
@@ -1039,6 +1051,19 @@ function deleteQuestion(questionId, index) {
             </div>
         `;
     } else {
+        // Find the highest question number in remaining questions
+        const questionNumbers = window.formBuilderState.form.questions
+            .map(q => {
+                const match = q.title.match(/Question (\d+)/);
+                return match ? parseInt(match[1]) : 0;
+            })
+            .filter(num => !isNaN(num));
+        
+        // Update the question counter
+        if (questionNumbers.length > 0) {
+            window.formBuilderState.questionCounter = Math.max(...questionNumbers);
+        }
+        
         // Render all questions
         window.formBuilderState.form.questions.forEach((q, i) => {
             renderQuestion(q, i);
