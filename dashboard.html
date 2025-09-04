@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
-    <div class="sidebar-overlay"></div>
     <div class="dashboard-container">
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -59,7 +58,7 @@
         <main class="dashboard-main">
             <header class="dashboard-header">
                 <div class="header-left">
-                    <button class="mobile-sidebar-toggle d-md-none">
+                    <button class="mobile-sidebar-toggle d-md-none" id="mobile-sidebar-toggle" style="background-color: #f0f0f0; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </button>
                     <h1>Dashboard</h1>
@@ -193,12 +192,53 @@
         </main>
     </div>
 
-    <!-- Overlay for mobile sidebar -->
-    <div class="sidebar-overlay"></div>
+    <!-- No overlay here - it's created by JavaScript -->
 
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
     <script src="js/sidebar-fix.js"></script>
     <script src="js/dashboard.js"></script>
+    
+    <!-- Direct script for sidebar toggle -->
+    <script>
+        // Backup script to ensure sidebar toggle works
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+            const sidebar = document.querySelector('.sidebar');
+            
+            if (mobileToggle && sidebar) {
+                mobileToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Mobile toggle clicked from inline script');
+                    
+                    // Toggle sidebar
+                    sidebar.classList.toggle('active');
+                    
+                    // Handle overlay
+                    let overlay = document.querySelector('.sidebar-overlay');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.className = 'sidebar-overlay';
+                        document.body.appendChild(overlay);
+                    }
+                    
+                    if (sidebar.classList.contains('active')) {
+                        overlay.classList.add('active');
+                        document.body.classList.add('sidebar-open');
+                        
+                        // Close when clicking overlay
+                        overlay.onclick = function() {
+                            sidebar.classList.remove('active');
+                            overlay.classList.remove('active');
+                            document.body.classList.remove('sidebar-open');
+                        };
+                    } else {
+                        overlay.classList.remove('active');
+                        document.body.classList.remove('sidebar-open');
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
