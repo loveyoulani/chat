@@ -879,6 +879,24 @@
         flex-direction: column;
         gap: 10px;
     }
+    
+    .forms-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .input-with-copy, .input-with-button {
+        flex-direction: column;
+    }
+    
+    .input-with-copy input, .input-with-button input {
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+    
+    .input-with-copy button, .input-with-button button {
+        border-radius: 0 0 var(--radius-md) var(--radius-md);
+        border-left: 1px solid var(--border-color);
+        width: 100%;
+    }
 }
 
 @media (max-width: 576px) {
@@ -893,5 +911,40 @@
     
     .question-actions {
         justify-content: flex-end;
+    }
+    
+    .forms-filters {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
+    
+    .filter-group select {
+        width: 100%;
+    }
+    
+    .form-card {
+        margin-bottom: 15px;
+    }
+    
+    .form-card-stats {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .form-stat {
+        width: 45%;
+        text-align: center;
+    }
+    
+    .action-item {
+        padding: 12px;
+    }
+    
+    .modal-body {
+        padding: 15px;
     }
 }

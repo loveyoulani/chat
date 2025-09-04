@@ -13,6 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <div class="sidebar-overlay"></div>
     <div class="dashboard-container">
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -60,6 +61,9 @@
         <main class="dashboard-main">
             <header class="dashboard-header">
                 <div class="header-left">
+                    <button class="mobile-sidebar-toggle d-md-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
                     <h1 id="form-title">Form Responses</h1>
                     <div class="form-meta" id="form-meta"></div>
                 </div>
@@ -323,6 +327,7 @@
 
     <script src="js/config.js"></script>
     <script src="js/auth-check.js"></script>
+    <script src="js/sidebar-fix.js"></script>
     <script src="js/responses.js"></script>
 </body>
 </html>

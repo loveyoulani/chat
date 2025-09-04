@@ -14,6 +14,9 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
 }
 
 .header-left {
@@ -54,6 +57,7 @@
 .header-right {
     display: flex;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .form-builder-content {
@@ -70,6 +74,7 @@
     height: calc(100vh - 70px);
     position: sticky;
     top: 70px;
+    z-index: 90;
 }
 
 .sidebar-section {
@@ -644,26 +649,194 @@ input:checked + .toggle-slider:before {
         height: auto;
         position: relative;
         top: 0;
+        overflow-y: visible;
+        max-height: none;
+        display: block !important;
+        visibility: visible !important;
+    }
+    
+    .form-builder-header {
+        padding: 12px 15px;
+    }
+    
+    .header-left {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .header-right {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    #form-title {
+        width: calc(100% - 40px);
+        font-size: 1.1rem;
     }
     
     .question-types {
         grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .form-builder-main {
+        padding: 15px;
+    }
+    
+    .section-content {
+        padding: 15px;
+    }
+    
+    .modal-body {
+        max-height: 70vh;
+    }
+    
+    .sidebar-section {
+        display: block !important;
+        visibility: visible !important;
     }
 }
 
 @media (max-width: 576px) {
     .question-types {
         grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    
+    .question-type {
+        padding: 8px;
     }
     
     .header-right .btn span {
         display: none;
     }
     
+    .header-right {
+        gap: 8px;
+        justify-content: space-between;
+    }
+    
+    .header-right .btn {
+        flex: 1;
+        padding: 8px;
+        min-width: 0;
+    }
+    
+    .back-button {
+        margin-right: 8px;
+    }
+    
     .scale-options, 
     .number-options, 
     .file-options {
         grid-template-columns: 1fr;
+    }
+    
+    .sidebar-section {
+        padding: 15px;
+        display: block !important;
+        visibility: visible !important;
+    }
+    
+    .form-sections li {
+        padding: 8px 10px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 0 auto;
+    }
+    
+    .modal-body {
+        padding: 15px;
+    }
+    
+    .modal-header, .modal-footer {
+        padding: 12px 15px;
+    }
+    
+    .preview-container {
+        height: 400px;
+    }
+    
+    /* Fix for question item on small screens */
+    .question-header {
+        flex-wrap: wrap;
+    }
+    
+    .question-title {
+        width: 100%;
+        order: 2;
+        margin-top: 8px;
+    }
+    
+    .question-actions {
+        margin-left: auto;
+    }
+    
+    /* Make form title input smaller */
+    #form-title {
+        width: calc(100% - 40px);
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+/* Additional styles for header buttons */
+.header-right .btn svg {
+    margin-right: 5px;
+}
+
+.small-screen .header-left {
+    width: 100%;
+}
+
+.full-width {
+    width: 100% !important;
+    justify-content: space-between !important;
+}
+
+/* Fix for very small screens */
+@media (max-width: 400px) {
+    .form-builder-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .header-right .btn {
+        flex: 1;
+        min-width: 0;
+        padding: 8px 5px;
+    }
+    
+    #form-title {
+        width: calc(100% - 40px);
+        max-width: 100%;
+    }
+    
+    .sidebar-section {
+        padding: 10px;
+    }
+    
+    .question-types {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+    }
+    
+    .question-type {
+        padding: 5px;
+        font-size: 0.7rem;
+    }
+    
+    .question-type svg {
+        width: 16px;
+        height: 16px;
     }
 }
 

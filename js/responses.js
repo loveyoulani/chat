@@ -902,9 +902,9 @@ function renderTableView(responses) {
             rowHTML += `
                 <td>
                     <div class="response-actions">
-                        <button class="action-btn view-response" data-index="${startIndex + index}" title="View Details">
+                        <a href="response-details.html?formId=${response.formId || (window.responsesState.form ? window.responsesState.form._id : '')}&responseId=${response._id}" class="action-btn view-response" title="View Details">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        </button>
+                        </a>
                         <button class="action-btn delete delete-response" data-id="${response._id}" title="Delete Response">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                         </button>
@@ -1380,11 +1380,7 @@ function setupEventListeners() {
     
     // Table view actions
     document.addEventListener("click", function(e) {
-        // View response
-        if (e.target.closest(".view-response")) {
-            const index = parseInt(e.target.closest(".view-response").dataset.index);
-            openResponseModal(index);
-        }
+        // View response links are now handled by href, no need for event handler
         
         // Delete response
         if (e.target.closest(".delete-response")) {
@@ -2189,7 +2185,7 @@ function renderAllResponses(responses) {
                 <td><span class="response-date">${formattedDate}</span></td>
                 <td>
                     <div class="response-actions">
-                        <a href="responses.html?formId=${response.formId}" class="action-btn view-form" title="View Form Responses">
+                        <a href="response-details.html?formId=${response.formId}&responseId=${response._id}" class="action-btn view-response" title="View Response Details">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         </a>
                     </div>

@@ -694,22 +694,24 @@
         }
 
         /* Error Message */
-        .error-message {
-            background-color: rgba(231, 76, 60, 0.1);
-            border-left: 4px solid var(--error-color);
-            color: var(--error-color);
-            padding: 12px 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
-        }
+.error-message {
+    color: var(--error-color);
+    font-size: 12px;
+    margin-bottom: 10px;
+    display: none;
+    font-weight: 400;
+}
 
-        .error-message.visible {
-            display: block;
-            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-        }
+.error-message.visible {
+    display: block;
+    animation: fadeIn 0.3s ease forwards;
+}
 
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
         @keyframes shake {
             10%, 90% { transform: translate3d(-1px, 0, 0); }
             20%, 80% { transform: translate3d(2px, 0, 0); }
@@ -840,7 +842,7 @@
     </div>
     
     <div class="branding">
-        Made with <a href="https://flyforms.stmy.me/">FlyForms</a>
+        Made with <a href="/" onclick="event.preventDefault(); window.location.href=window.location.protocol + '//' + window.location.host;">FlyForms</a>
     </div>
 
 <script>
@@ -1145,9 +1147,15 @@ function renderErrorState() {
     errorDescription.textContent = "The form you're looking for doesn't exist or has been removed.";
     
     const homeButton = document.createElement('a');
-    homeButton.href = 'https://flyforms.stmy.me/';
+    homeButton.href = '/';
     homeButton.className = 'btn';
     homeButton.textContent = 'Go to Homepage';
+    homeButton.onclick = function(e) {
+        e.preventDefault();
+        // Get the base URL (protocol + hostname)
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        window.location.href = baseUrl;
+    };
     
     errorState.appendChild(errorIcon);
     errorState.appendChild(errorTitle);
@@ -1243,9 +1251,15 @@ function buildFormUI(formData) {
     }
     
     const createOwnText = document.createElement('a');
-    createOwnText.href = 'index.html';
+    createOwnText.href = '/';
     createOwnText.className = 'create-own';
     createOwnText.textContent = 'Create your own FlyForm';
+    createOwnText.onclick = function(e) {
+        e.preventDefault();
+        // Get the base URL (protocol + hostname)
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        window.location.href = baseUrl;
+    };
     
     endContent.appendChild(checkmark);
     endContent.appendChild(endTitle);
@@ -1284,16 +1298,24 @@ function createQuestionSlide(question, index) {
     slide.className = 'slide';
     slide.id = `slide-${question.id}`;
     
+    // Create title with required indicator if needed
+    const title = document.createElement('h1');
+    title.textContent = question.title;
+    if (question.required) {
+        const requiredStar = document.createElement('span');
+        requiredStar.textContent = ' *';
+        requiredStar.style.color = '#000';
+        requiredStar.style.fontSize = '0.8em';
+        title.appendChild(requiredStar);
+    }
+    slide.appendChild(title);
+    
     // Error message container for validation
     const errorMessage = document.createElement('div');
     errorMessage.className = 'error-message';
     errorMessage.id = `error-${question.id}`;
     errorMessage.textContent = 'This question requires an answer.';
     slide.appendChild(errorMessage);
-    
-    const title = document.createElement('h1');
-    title.textContent = question.title;
-    slide.appendChild(title);
     
     if (question.description) {
         const description = document.createElement('p');

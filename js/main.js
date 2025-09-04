@@ -6,7 +6,59 @@ document.addEventListener("DOMContentLoaded", function() {
     if (mobileMenuToggle && header) {
         mobileMenuToggle.addEventListener("click", function() {
             header.classList.toggle("mobile-menu-open");
+            
+            // Change hamburger to X
+            const spans = this.querySelectorAll('span');
+            spans.forEach(span => span.classList.toggle('active'));
         });
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!header.contains(event.target) && header.classList.contains('mobile-menu-open')) {
+                header.classList.remove('mobile-menu-open');
+                const spans = mobileMenuToggle.querySelectorAll('span');
+                spans.forEach(span => span.classList.remove('active'));
+            }
+        });
+    }
+    
+    // Dashboard sidebar toggle
+    const sidebarToggle = document.querySelector(".sidebar-toggle");
+    const mobileSidebarToggle = document.querySelector(".mobile-sidebar-toggle");
+    const sidebar = document.querySelector(".sidebar");
+    const sidebarOverlay = document.querySelector(".sidebar-overlay");
+    
+    function toggleSidebar() {
+        if (sidebar) {
+            sidebar.classList.toggle("active");
+            document.body.classList.toggle("sidebar-open");
+            
+            // Create or remove overlay
+            if (sidebar.classList.contains("active")) {
+                if (!sidebarOverlay) {
+                    const overlay = document.createElement("div");
+                    overlay.className = "sidebar-overlay active";
+                    document.body.appendChild(overlay);
+                    
+                    overlay.addEventListener("click", toggleSidebar);
+                }
+            } else if (sidebarOverlay) {
+                sidebarOverlay.remove();
+            }
+        }
+    }
+    
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener("click", toggleSidebar);
+    }
+    
+    if (mobileSidebarToggle && sidebar) {
+        mobileSidebarToggle.addEventListener("click", toggleSidebar);
+    }
+    
+    // Close sidebar when clicking overlay
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", toggleSidebar);
     }
     
     // Smooth scroll for anchor links
